@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">EidKit</string>
+
+    <!-- Home screen -->
+    <string name="home_title">EidKit</string>
+    <string name="home_subtitle">The first Romanian app for reading, signing and authentication with the electronic identity card.</string>
+    <string name="home_feature_kyc_title">KYC Read</string>
+    <string name="home_feature_kyc_description">Read identity, photo, and verify document authenticity.</string>
+    <string name="home_feature_auth_title">Authentication</string>
+    <string name="home_feature_auth_description">Passwordless login — verify chip genuineness with active authentication.</string>
+    <string name="home_feature_signing_title">Document Signing</string>
+    <string name="home_feature_signing_description">Pick a PDF, sign it with the card\'s nonRepudiation key, and save the signed document.</string>
+    <string name="home_try_it">Try it</string>
+
+    <!-- CAN info sheet -->
+    <string name="can_info_title">Where is the CAN?</string>
+    <string name="can_info_body">The Card Access Number (CAN) is the 6-digit number printed in the bottom-right area on the front of your Romanian electronic identity card.</string>
+
+    <!-- Common labels -->
+    <string name="label_can">Card Access Number (CAN) — 6 digits</string>
+    <string name="label_can_hint">6 digits printed on the front</string>
+    <string name="label_auth_pin">Authentication PIN — 4 digits</string>
+    <string name="label_auth_pin_hint">4-digit PIN</string>
+    <string name="label_signing_pin">Signing PIN — 6 digits</string>
+    <string name="label_signing_pin_hint">6-digit PIN</string>
+
+    <!-- Result detail labels -->
+    <string name="result_birthplace_label">Birthplace</string>
+    <string name="result_address_label">Address</string>
+    <string name="result_document_label">Document number</string>
+    <string name="result_issue_date_label">Issue date</string>
+    <string name="result_expiry_label">Expires</string>
+    <string name="result_issuing_authority_label">Issuing authority</string>
+    <string name="result_signature_image_label">Handwritten signature</string>
+    <string name="action_scan_card">Scan Card</string>
+    <string name="action_try_again">Try Again</string>
+    <string name="action_back">Back</string>
+    <string name="action_copy">Copy</string>
+    <string name="copied">Copied to clipboard</string>
+
+    <!-- NFC prompt -->
+    <string name="nfc_prompt_title">Hold card to phone</string>
+    <string name="nfc_prompt_subtitle">Place the back of your Romanian ID card against the NFC antenna</string>
+
+    <!-- KYC export -->
+    <string name="action_export_pdf">Export to PDF</string>
+    <string name="kyc_export_generating">Generating PDF…</string>
+    <string name="kyc_export_saved">Saved to Downloads — tap to open</string>
+    <string name="kyc_export_error">Could not save PDF: %s</string>
+
+    <!-- KYC screen -->
+    <string name="kyc_title">KYC Read</string>
+    <string name="kyc_include_photo">Include photo (~7s)</string>
+    <string name="kyc_include_signature">Include signature image (~1.5s)</string>
+
+    <!-- Auth screen -->
+    <string name="auth_title">Authentication</string>
+    <string name="auth_pin_hint">This is the 4-digit PIN set during card activation at MAI (not the signing PIN)</string>
+
+    <!-- Signing screen -->
+    <string name="signing_title">Document Signing</string>
+    <string name="signing_demo_doc_label">Demo document</string>
+    <string name="signing_demo_doc_value">SHA-384 of a sample contract (demo hash — not a real document)</string>
+    <string name="signing_pick_pdf_title">Select a PDF to Sign</string>
+    <string name="signing_pick_pdf_description">The app computes a SHA-384 hash of the PDF and signs it with your card\'s nonRepudiation key.</string>
+    <string name="signing_pick_pdf_button">Pick PDF from device</string>
+    <string name="signing_document_selected">Document selected</string>
+    <string name="signing_hash_label">SHA-384 (first 24 hex)</string>
+    <string name="signing_change_document">Change document</string>
+    <string name="signing_awaiting_output">Choose where to save the signed PDF…</string>
+    <string name="signing_success_saved">Signed PDF saved</string>
+    <string name="signing_success_open">Open signed PDF</string>
+    <string name="signing_filename_prefix">signed</string>
+
+    <!-- Wizard step labels -->
+    <string name="step_connecting">Connecting to card</string>
+    <string name="step_establishing_pace">Establishing secure channel</string>
+    <string name="step_reading_photo">Reading photo</string>
+    <string name="step_reading_signature_image">Reading signature image</string>
+    <string name="step_verifying_passive_auth">Verifying document</string>
+    <string name="step_verifying_pin">Verifying PIN</string>
+    <string name="step_reading_identity">Reading identity</string>
+    <string name="step_verifying_active_auth">Verifying chip</string>
+    <string name="step_signing_document">Signing document</string>
+    <string name="step_done">Done</string>
+
+    <!-- PDF report labels -->
+    <string name="pdf_ok">OK</string>
+    <string name="pdf_fail">FAIL</string>
+    <string name="pdf_title">KYC Identity Report</string>
+    <string name="pdf_generated">Generated: %s</string>
+    <string name="pdf_section_identity">Identity</string>
+    <string name="pdf_section_authenticity">Document Authenticity</string>
+    <string name="pdf_section_chip">Chip Genuineness</string>
+    <string name="pdf_section_signature">Handwritten Signature</string>
+    <string name="pdf_field_full_name">Full name</string>
+    <string name="pdf_field_cnp">CNP</string>
+    <string name="pdf_field_dob">Date of birth</string>
+    <string name="pdf_field_nationality">Nationality</string>
+    <string name="pdf_field_birthplace">Birthplace</string>
+    <string name="pdf_field_doc_no">Document no.</string>
+    <string name="pdf_field_issue_date">Issue date</string>
+    <string name="pdf_field_expires">Expires</string>
+    <string name="pdf_field_issuing_authority">Issuing authority</string>
+    <string name="pdf_field_address">Address</string>
+    <string name="pdf_field_doc_cert">Document cert</string>
+    <string name="pdf_field_issued_by">Issued by</string>
+    <string name="pdf_field_chip_cert">Chip cert</string>
+
+    <!-- Result labels -->
+    <string name="result_passive_auth_valid">Document authentic</string>
+    <string name="result_passive_auth_invalid">Document invalid</string>
+    <string name="result_active_auth_verified">Chip genuine</string>
+    <string name="result_active_auth_failed">Chip verification failed</string>
+    <string name="result_key_usage_label">Key usage</string>
+    <string name="key_usage_digital_signature">Digital signature</string>
+    <string name="key_usage_non_repudiation">Non-repudiation (signing)</string>
+    <string name="result_dsc_subject_label">Document cert</string>
+    <string name="result_issuer_label">Issued by</string>
+    <string name="result_chip_cert_label">Chip cert</string>
+    <string name="result_identity_label">Identity</string>
+    <string name="result_cnp_label">CNP</string>
+    <string name="result_dob_label">Date of birth</string>
+    <string name="result_nationality_label">Nationality</string>
+    <string name="result_claim_ready">Identity claim ready for backend verification</string>
+    <string name="result_signature_label">Signature (raw r||s, hex)</string>
+    <string name="result_cert_subject_label">Certificate</string>
+
+    <!-- Errors -->
+    <string name="error_wrong_pin">Wrong PIN — %d attempt(s) remaining</string>
+    <string name="error_pin_blocked">PIN blocked — visit a MAI service point to unblock</string>
+    <string name="error_card_lost">Card moved — hold it steady and try again</string>
+    <string name="error_pace_failed">PACE failed — check the CAN and try again</string>
+    <string name="error_generic">Error: %s</string>
+    <string name="error_nfc_unavailable">NFC is not available or is disabled on this device</string>
+</resources>
