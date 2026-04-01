@@ -1,8 +1,6 @@
 package ro.eidkit.app
 
-import android.content.Context
 import android.content.Intent
-import android.content.res.Configuration
 import android.nfc.tech.IsoDep
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -54,13 +52,6 @@ class MainActivity : ComponentActivity() {
 
     // Tracks which tab is visible so NFC events go to the right VM.
     private var selectedTab: Int = TAB_KYC
-
-    override fun attachBaseContext(newBase: Context) {
-        val locale = java.util.Locale("ro", "RO")
-        val config = Configuration(newBase.resources.configuration)
-        config.setLocale(locale)
-        super.attachBaseContext(newBase.createConfigurationContext(config))
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
