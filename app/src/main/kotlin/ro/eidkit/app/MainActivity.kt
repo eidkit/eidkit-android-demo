@@ -26,6 +26,7 @@ import ro.eidkit.app.screens.KycScreen
 import ro.eidkit.app.screens.KycViewModel
 import ro.eidkit.app.screens.SigningScreen
 import ro.eidkit.app.screens.SigningViewModel
+import ro.eidkit.app.ui.components.DemoRibbon
 import ro.eidkit.app.ui.theme.EidKitTheme
 import ro.eidkit.sdk.EidKit
 
@@ -100,6 +101,7 @@ class MainActivity : ComponentActivity() {
                             TAB_AUTH    -> AuthScreen(vm = authVmInstance)
                             TAB_SIGNING -> SigningScreen(vm = signingVmInstance)
                         }
+                        if (EidKit.isDemoMode()) DemoRibbon()
                     }
                 }
             }

@@ -27,6 +27,9 @@ render.experimental.xml
 *.jks
 *.keystore
 
+# Local release secrets — never commit
+release.secrets.ps1
+
 # Google Services (e.g. APIs or Firebase)
 google-services.json
 

@@ -92,6 +92,7 @@
     <string name="pdf_generated">Generat: %s</string>
     <string name="pdf_section_identity">Identitate</string>
     <string name="pdf_section_authenticity">Autenticitatea Documentului</string>
+    <string name="demo_ribbon">MOD DEMO</string>
     <string name="pdf_section_chip">Autenticitatea Cipului</string>
     <string name="pdf_section_signature">Semnătură Olografă</string>
     <string name="pdf_field_full_name">Nume complet</string>

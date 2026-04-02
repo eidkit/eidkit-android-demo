@@ -92,6 +92,7 @@
     <string name="pdf_generated">Generated: %s</string>
     <string name="pdf_section_identity">Identity</string>
     <string name="pdf_section_authenticity">Document Authenticity</string>
+    <string name="demo_ribbon">DEMO MODE</string>
     <string name="pdf_section_chip">Chip Genuineness</string>
     <string name="pdf_section_signature">Handwritten Signature</string>
     <string name="pdf_field_full_name">Full name</string>
