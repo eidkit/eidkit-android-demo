@@ -2,38 +2,27 @@ package ro.eidkit.app.pdf
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.pdmodel.interactive.digitalsignature.ExternalSigningSupport
 import com.tom_roush.pdfbox.pdmodel.interactive.digitalsignature.PDSignature
 import com.tom_roush.pdfbox.pdmodel.interactive.digitalsignature.SignatureOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.bouncycastle.asn1.ASN1EncodableVector
-import org.bouncycastle.asn1.ASN1Integer
-import org.bouncycastle.asn1.ASN1ObjectIdentifier
-import org.bouncycastle.asn1.ASN1Primitive
-import org.bouncycastle.asn1.DEROctetString
-import org.bouncycastle.asn1.DERSequence
-import org.bouncycastle.asn1.DERSet
-import org.bouncycastle.asn1.cms.Attribute
-import org.bouncycastle.asn1.cms.CMSAttributes
-import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers
-import org.bouncycastle.asn1.x509.AlgorithmIdentifier
-import org.bouncycastle.asn1.pkcs.IssuerAndSerialNumber
-import org.bouncycastle.asn1.x509.Certificate
+import org.bouncycastle.cert.X509CertificateHolder
 import java.io.ByteArrayOutputStream
-import java.math.BigInteger
 import java.security.MessageDigest
-import java.security.cert.CertificateFactory
-import java.security.cert.X509Certificate
 import java.util.Calendar
 
 private const val MAX_PDF_BYTES = 100L * 1024 * 1024  // 100 MB
 
-// OID for ECDSA with SHA-384
-private val OID_ECDSA_SHA384 = ASN1ObjectIdentifier("1.2.840.10045.4.3.3")
-// OID for SHA-384
-private val OID_SHA384 = ASN1ObjectIdentifier("2.16.840.1.101.3.4.2.2")
+// Pre-encoded OID bytes (tag 0x06 + length + value)
+private val OID_ECDSA_SHA384 = byteArrayOf(0x06, 0x08, 0x2A, 0x86.toByte(), 0x48, 0xCE.toByte(), 0x3D, 0x04, 0x03, 0x03)
+private val OID_SHA384       = byteArrayOf(0x06, 0x09, 0x60, 0x86.toByte(), 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x02)
+private val OID_DATA         = byteArrayOf(0x06, 0x09, 0x2A, 0x86.toByte(), 0x48, 0x86.toByte(), 0xF7.toByte(), 0x0D, 0x01, 0x07, 0x01)
+private val OID_CONTENT_TYPE = byteArrayOf(0x06, 0x09, 0x2A, 0x86.toByte(), 0x48, 0x86.toByte(), 0xF7.toByte(), 0x0D, 0x01, 0x09, 0x03)
+private val OID_MSG_DIGEST   = byteArrayOf(0x06, 0x09, 0x2A, 0x86.toByte(), 0x48, 0x86.toByte(), 0xF7.toByte(), 0x0D, 0x01, 0x09, 0x04)
+private val OID_SIGNED_DATA  = byteArrayOf(0x06, 0x09, 0x2A, 0x86.toByte(), 0x48, 0x86.toByte(), 0xF7.toByte(), 0x0D, 0x01, 0x07, 0x02)
 
 /**
  * Holds the state between PAdES phase 1 (PDF preparation) and phase 2 (CMS embedding).
@@ -134,15 +123,14 @@ class PdfSigner(private val context: Context) {
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             try {
-                val cert = CertificateFactory.getInstance("X.509")
-                    .generateCertificate(certificateBytes.inputStream()) as X509Certificate
-
                 val cms = buildCms(
                     signedAttrsDer = ctx.signedAttrsDer,
                     rawSignature   = signatureBytes,
-                    cert           = cert,
+                    certBytes      = certificateBytes,
                 )
 
+                Log.d("PdfSigner", "CMS hex: ${cms.toHexString()}")
+                Log.d("PdfSigner", "signedAttrsDer hex: ${ctx.signedAttrsDer.toHexString()}")
                 ctx.externalSigning.setSignature(cms)
 
                 // tempOut now contains the complete signed PDF — write to chosen location
@@ -159,100 +147,62 @@ class PdfSigner(private val context: Context) {
 
     /**
      * Build the DER-encoded signedAttrs SET for a detached CMS signature.
+     * Hand-rolled to guarantee stable byte ordering — BouncyCastle DERSet sorts
+     * members canonically which would break the hash the card signed.
      *
-     * signedAttrs = SET {
-     *   contentType = id-data
-     *   messageDigest = SHA-384(PDF byte ranges)
+     * SET {
+     *   SEQUENCE { OID contentType,   SET { OID id-data } }
+     *   SEQUENCE { OID messageDigest, SET { OCTET STRING pdfHash } }
      * }
-     *
-     * This must be DER-encoded (not BER) for the signature to be verifiable.
-     * The card signs SHA-384(this encoding).
      */
     private fun buildSignedAttrsDer(pdfHash: ByteArray): ByteArray {
-        val vec = ASN1EncodableVector().apply {
-            add(Attribute(CMSAttributes.contentType, DERSet(PKCSObjectIdentifiers.data)))
-            add(Attribute(CMSAttributes.messageDigest, DERSet(DEROctetString(pdfHash))))
-        }
-        return DERSet(vec).encoded
+        val contentTypeAttr = asn1Seq(asn1Bytes(OID_CONTENT_TYPE) + asn1Set(asn1Bytes(OID_DATA)))
+        val msgDigestAttr   = asn1Seq(asn1Bytes(OID_MSG_DIGEST) + asn1Set(asn1OctetString(pdfHash)))
+        return asn1Set(contentTypeAttr + msgDigestAttr)
     }
 
     /**
      * Build a minimal CMS SignedData (detached, ECDSA-SHA384) for PAdES embedding.
-     *
-     * Constructed as raw ASN.1 to guarantee our pre-computed signedAttrs and card signature
-     * are embedded exactly — BouncyCastle high-level generators recompute the digest
-     * which would produce a mismatch with an external signing device.
-     *
-     * Structure (RFC 5652 §5):
-     * SignedData {
-     *   version = 1
-     *   digestAlgorithms = { SHA-384 }
-     *   encapContentInfo = { id-data, absent }   -- detached
-     *   certificates = { cert }
-     *   signerInfos = { SignerInfo {
-     *     version = 1
-     *     sid = IssuerAndSerialNumber
-     *     digestAlgorithm = SHA-384
-     *     signedAttrs = <pre-built DER from phase 1>
-     *     signatureAlgorithm = ECDSA-SHA384
-     *     signature = DER(r,s)
-     *   }}
-     * }
+     * Hand-rolled to embed signedAttrs verbatim — no BouncyCastle re-encoding.
      */
     private fun buildCms(
         signedAttrsDer: ByteArray,
         rawSignature: ByteArray,
-        cert: X509Certificate,
+        certBytes: ByteArray,
     ): ByteArray {
         val derSig = rawToDer(rawSignature)
-        val bcCert = Certificate.getInstance(ASN1Primitive.fromByteArray(cert.encoded))
-        val issuerAndSerial = IssuerAndSerialNumber(
-            bcCert.issuer,
-            bcCert.serialNumber.value
+
+        val holder = X509CertificateHolder(certBytes)
+        val issuerDer  = holder.issuer.encoded                    // DER Name SEQUENCE
+        val serialDer  = org.bouncycastle.asn1.ASN1Integer(holder.serialNumber).encoded  // DER INTEGER
+        val issuerAndSerial = asn1Seq(issuerDer + serialDer)
+
+        // [0] IMPLICIT SET — retag 0x31 → 0xA0, content bytes identical to what was hashed
+        val signedAttrsTagged = signedAttrsDer.clone().also { it[0] = 0xA0.toByte() }
+
+        val signerInfo = asn1Seq(
+            asn1Integer(1) +                          // version
+            issuerAndSerial +                          // sid
+            asn1Seq(asn1Bytes(OID_SHA384)) +           // digestAlgorithm
+            signedAttrsTagged +                        // [0] signedAttrs
+            asn1Seq(asn1Bytes(OID_ECDSA_SHA384)) +     // signatureAlgorithm
+            asn1OctetString(derSig)                    // signature
         )
 
-        // Re-parse the pre-built signedAttrsDer so it round-trips as [0] IMPLICIT
-        val signedAttrsAsn1 = ASN1Primitive.fromByteArray(signedAttrsDer)
+        // certificates [0] IMPLICIT — retag SET 0x31 → 0xA0
+        val certsTagged = asn1Set(certBytes).also { it[0] = 0xA0.toByte() }  // certBytes = raw DER, not re-encoded
 
-        // SignerInfo
-        val signerInfoVec = ASN1EncodableVector().apply {
-            add(ASN1Integer(1L))                                                    // version
-            add(issuerAndSerial)                                                    // sid
-            add(AlgorithmIdentifier(OID_SHA384))                                    // digestAlgorithm
-            add(org.bouncycastle.asn1.DERTaggedObject(false, 0, signedAttrsAsn1))  // [0] signedAttrs
-            add(AlgorithmIdentifier(OID_ECDSA_SHA384))                              // signatureAlgorithm
-            add(DEROctetString(derSig))                                             // signature
-        }
+        val signedData = asn1Seq(
+            asn1Integer(1) +                                        // version
+            asn1Set(asn1Seq(asn1Bytes(OID_SHA384))) +              // digestAlgorithms
+            asn1Seq(asn1Bytes(OID_DATA)) +                         // encapContentInfo (detached)
+            certsTagged +                                           // [0] certificates
+            asn1Set(signerInfo)                                     // signerInfos
+        )
 
-        // digestAlgorithms SET
-        val digestAlgsVec = ASN1EncodableVector().apply {
-            add(AlgorithmIdentifier(OID_SHA384))
-        }
-
-        // encapContentInfo: id-data, no content (detached)
-        val encapContentInfo = DERSequence(PKCSObjectIdentifiers.data)
-
-        // certificates [0] IMPLICIT
-        val certsVec = ASN1EncodableVector().apply {
-            add(ASN1Primitive.fromByteArray(cert.encoded))
-        }
-
-        // SignedData
-        val signedDataVec = ASN1EncodableVector().apply {
-            add(ASN1Integer(1L))                                                    // version
-            add(DERSet(digestAlgsVec))                                              // digestAlgorithms
-            add(encapContentInfo)                                                   // encapContentInfo
-            add(org.bouncycastle.asn1.DERTaggedObject(false, 0, DERSet(certsVec))) // [0] certificates
-            add(DERSet(DERSequence(signerInfoVec)))                                 // signerInfos
-        }
-
-        // ContentInfo wrapping SignedData
-        val contentInfoVec = ASN1EncodableVector().apply {
-            add(PKCSObjectIdentifiers.signedData)
-            add(org.bouncycastle.asn1.DERTaggedObject(true, 0, DERSequence(signedDataVec)))
-        }
-
-        return DERSequence(contentInfoVec).encoded
+        // ContentInfo { OID signedData, [0] EXPLICIT signedData }
+        val taggedSignedData = byteArrayOf(0xA0.toByte()) + berLength(signedData.size) + signedData
+        return asn1Seq(asn1Bytes(OID_SIGNED_DATA) + taggedSignedData)
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -261,14 +211,33 @@ class PdfSigner(private val context: Context) {
         doc.documentInformation?.author?.takeIf { it.isNotBlank() }
     }.getOrNull()
 
-    /**
-     * Convert 96-byte raw r||s ECDSA-384 signature to DER SEQUENCE { INTEGER r, INTEGER s }.
-     */
+    /** Convert 96-byte raw r||s to DER SEQUENCE { INTEGER r, INTEGER s }. */
     private fun rawToDer(raw: ByteArray): ByteArray {
         require(raw.size == 96) { "Expected 96-byte r||s, got ${raw.size}" }
-        val r = BigInteger(1, raw.copyOfRange(0, 48))
-        val s = BigInteger(1, raw.copyOfRange(48, 96))
-        val seq = DERSequence(arrayOf(ASN1Integer(r), ASN1Integer(s)))
-        return seq.encoded
+        val r = encodeAsn1Integer(raw.copyOfRange(0, 48))
+        val s = encodeAsn1Integer(raw.copyOfRange(48, 96))
+        return asn1Seq(r + s)
     }
+
+    private fun encodeAsn1Integer(value: ByteArray): ByteArray {
+        var bytes = value.dropWhile { it == 0x00.toByte() }.toByteArray()
+        if (bytes.isEmpty() || bytes[0].toInt() and 0x80 != 0) bytes = byteArrayOf(0x00) + bytes
+        return byteArrayOf(0x02) + berLength(bytes.size) + bytes
+    }
+
 }
+
+// ── Hand-rolled ASN.1 primitives ─────────────────────────────────────────────
+
+private fun berLength(len: Int): ByteArray = when {
+    len < 0x80   -> byteArrayOf(len.toByte())
+    len <= 0xFF  -> byteArrayOf(0x81.toByte(), len.toByte())
+    else         -> byteArrayOf(0x82.toByte(), (len shr 8).toByte(), (len and 0xFF).toByte())
+}
+
+private fun asn1Seq(body: ByteArray)      = byteArrayOf(0x30) + berLength(body.size) + body
+private fun asn1Set(body: ByteArray)      = byteArrayOf(0x31) + berLength(body.size) + body
+private fun asn1OctetString(v: ByteArray) = byteArrayOf(0x04) + berLength(v.size) + v
+private fun asn1Integer(v: Int)           = byteArrayOf(0x02, 0x01, v.toByte())
+private fun asn1Bytes(v: ByteArray)       = v
+private fun ByteArray.toHexString()      = joinToString("") { "%02x".format(it) }

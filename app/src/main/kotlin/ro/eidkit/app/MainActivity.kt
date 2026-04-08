@@ -89,7 +89,7 @@ class MainActivity : ComponentActivity() {
                             NavigationBarItem(
                                 selected = selectedTab == TAB_SIGNING,
                                 onClick  = { selectedTab = TAB_SIGNING },
-                                icon     = { Icon(painterResource(R.drawable.ic_description), contentDescription = null) },
+                                icon     = { Icon(painterResource(R.drawable.ic_draw), contentDescription = null) },
                                 label    = { Text(stringResource(R.string.signing_title)) },
                             )
                         }
