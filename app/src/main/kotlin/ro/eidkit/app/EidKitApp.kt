@@ -13,7 +13,7 @@ class EidKitApp : Application() {
         PDFBoxResourceLoader.init(applicationContext)
         initSentry()
         EidKit.configure(this, EidKitConfig {
-            // licenseToken = BuildConfig.EIDKIT_LICENSE_TOKEN  // set when you have a token
+            licenseToken = "demo"
             tracerProvider = buildTracerProvider()
             // Forward every handled CeiError to Sentry Issues (errors that don't crash).
             // These are thrown-but-caught errors that never reach the default crash handler.
