@@ -1,6 +1,8 @@
 package ro.eidkit.app
 
 import android.content.Intent
+import android.nfc.NfcAdapter
+import android.nfc.Tag
 import android.nfc.tech.IsoDep
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -12,8 +14,10 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -22,6 +26,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ro.eidkit.app.screens.AuthScreen
 import ro.eidkit.app.screens.AuthViewModel
+import ro.eidkit.app.screens.CityHallAuthScreen
+import ro.eidkit.app.screens.CityHallAuthViewModel
 import ro.eidkit.app.screens.KycScreen
 import ro.eidkit.app.screens.KycViewModel
 import ro.eidkit.app.screens.SigningScreen
@@ -37,71 +43,96 @@ private const val TAB_SIGNING = 2
 /**
  * Single-activity host with a bottom navigation bar.
  *
- * All three flow ViewModels are kept alive simultaneously (scoped to the activity) so that
- * switching tabs does not lose in-progress state.
- *
  * NFC routing: [onNewIntent] dispatches the card tap to whichever tab is currently selected.
+ * Deep link routing: eidkit://auth intents switch to the city hall tab and init the session.
  */
 class MainActivity : ComponentActivity() {
 
-    private val nfcManager = EidKit.nfcManager()
+    private val nfcAdapter: NfcAdapter? by lazy { NfcAdapter.getDefaultAdapter(this) }
 
-    // ViewModel refs are set once the composables enter composition and remain stable.
     private var kycVm: KycViewModel? = null
     private var authVm: AuthViewModel? = null
     private var signingVm: SigningViewModel? = null
+    private var cityHallVm: CityHallAuthViewModel? = null
 
-    // Tracks which tab is visible so NFC events go to the right VM.
     private var selectedTab: Int = TAB_KYC
+    private val _cityHallActive = mutableStateOf(false)
+    private var cityHallActive: Boolean
+        get() = _cityHallActive.value
+        set(v) { _cityHallActive.value = v }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (savedInstanceState == null &&
+            intent?.data?.scheme == "eidkit" && intent?.data?.host == "auth") {
+            this.cityHallActive = true
+            this.selectedTab = TAB_KYC
+        }
         setContent {
             EidKitTheme {
                 var selectedTab by rememberSaveable { mutableIntStateOf(TAB_KYC) }
+                val cityHallActive by _cityHallActive
 
-                // Instantiate all VMs at the activity scope so they survive tab switches.
                 val kycVmInstance: KycViewModel = viewModel()
                 val authVmInstance: AuthViewModel = viewModel()
                 val signingVmInstance: SigningViewModel = viewModel()
+                val cityHallVmInstance: CityHallAuthViewModel = viewModel()
 
-                // Keep activity-level refs in sync for NFC routing.
-                kycVm          = kycVmInstance
-                authVm         = authVmInstance
-                signingVm      = signingVmInstance
+                kycVm      = kycVmInstance
+                authVm     = authVmInstance
+                signingVm  = signingVmInstance
+                cityHallVm = cityHallVmInstance
                 this.selectedTab = selectedTab
 
-                Scaffold(
-                    bottomBar = {
-                        NavigationBar {
-                            NavigationBarItem(
-                                selected = selectedTab == TAB_KYC,
-                                onClick  = { selectedTab = TAB_KYC },
-                                icon     = { Icon(painterResource(R.drawable.ic_badge), contentDescription = null) },
-                                label    = { Text(stringResource(R.string.kyc_title)) },
-                            )
-                            NavigationBarItem(
-                                selected = selectedTab == TAB_AUTH,
-                                onClick  = { selectedTab = TAB_AUTH },
-                                icon     = { Icon(painterResource(R.drawable.ic_shield), contentDescription = null) },
-                                label    = { Text(stringResource(R.string.auth_title)) },
-                            )
-                            NavigationBarItem(
-                                selected = selectedTab == TAB_SIGNING,
-                                onClick  = { selectedTab = TAB_SIGNING },
-                                icon     = { Icon(painterResource(R.drawable.ic_draw), contentDescription = null) },
-                                label    = { Text(stringResource(R.string.signing_title)) },
-                            )
-                        }
+                // Init city hall VM from deep link exactly once after first composition
+                LaunchedEffect(Unit) {
+                    if (cityHallActive) {
+                        intent?.let { parseDeepLink(it, cityHallVmInstance) }
                     }
-                ) { innerPadding ->
-                    Box(modifier = Modifier.padding(innerPadding)) {
-                        when (selectedTab) {
-                            TAB_KYC     -> KycScreen(vm = kycVmInstance)
-                            TAB_AUTH    -> AuthScreen(vm = authVmInstance)
-                            TAB_SIGNING -> SigningScreen(vm = signingVmInstance)
-                        }
+                }
+
+                if (cityHallActive) {
+                    // Full-screen city hall auth — no bottom bar
+                    Box {
+                        CityHallAuthScreen(vm = cityHallVmInstance, onClose = {
+                            this@MainActivity.cityHallActive = false
+                            selectedTab = TAB_KYC
+                        })
                         if (EidKit.isDemoMode()) DemoRibbon()
+                    }
+                } else {
+                    Scaffold(
+                        bottomBar = {
+                            NavigationBar {
+                                NavigationBarItem(
+                                    selected = selectedTab == TAB_KYC,
+                                    onClick  = { selectedTab = TAB_KYC },
+                                    icon     = { Icon(painterResource(R.drawable.ic_badge), contentDescription = null) },
+                                    label    = { Text(stringResource(R.string.kyc_title)) },
+                                )
+                                NavigationBarItem(
+                                    selected = selectedTab == TAB_AUTH,
+                                    onClick  = { selectedTab = TAB_AUTH },
+                                    icon     = { Icon(painterResource(R.drawable.ic_shield), contentDescription = null) },
+                                    label    = { Text(stringResource(R.string.auth_title)) },
+                                )
+                                NavigationBarItem(
+                                    selected = selectedTab == TAB_SIGNING,
+                                    onClick  = { selectedTab = TAB_SIGNING },
+                                    icon     = { Icon(painterResource(R.drawable.ic_draw), contentDescription = null) },
+                                    label    = { Text(stringResource(R.string.signing_title)) },
+                                )
+                            }
+                        }
+                    ) { innerPadding ->
+                        Box(modifier = Modifier.padding(innerPadding)) {
+                            when (selectedTab) {
+                                TAB_KYC     -> KycScreen(vm = kycVmInstance)
+                                TAB_AUTH    -> AuthScreen(vm = authVmInstance)
+                                TAB_SIGNING -> SigningScreen(vm = signingVmInstance)
+                            }
+                            if (EidKit.isDemoMode()) DemoRibbon()
+                        }
                     }
                 }
             }
@@ -110,24 +141,50 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        try {
-            nfcManager.enableForegroundDispatch(this)
-        } catch (_: ro.eidkit.sdk.error.CeiError.NfcUnsupported) {}
+        val adapter = nfcAdapter ?: return
+        if (!adapter.isEnabled) return
+        adapter.enableReaderMode(
+            this,
+            { tag: Tag ->
+                val isoDep = IsoDep.get(tag) ?: return@enableReaderMode
+                runOnUiThread {
+                    if (cityHallActive) {
+                        cityHallVm?.onCardDetected(isoDep)
+                    } else {
+                        when (selectedTab) {
+                            TAB_KYC     -> kycVm?.onCardDetected(isoDep)
+                            TAB_AUTH    -> authVm?.onCardDetected(isoDep)
+                            TAB_SIGNING -> signingVm?.onCardDetected(isoDep)
+                        }
+                    }
+                }
+            },
+            NfcAdapter.FLAG_READER_NFC_A or NfcAdapter.FLAG_READER_NFC_B or NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK,
+            null,
+        )
     }
 
     override fun onPause() {
         super.onPause()
-        nfcManager.disableForegroundDispatch(this)
+        nfcAdapter?.disableReaderMode(this)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        val isoDep: IsoDep = nfcManager.handleIntent(intent) ?: return
-
-        when (selectedTab) {
-            TAB_KYC     -> kycVm?.onCardDetected(isoDep)
-            TAB_AUTH    -> authVm?.onCardDetected(isoDep)
-            TAB_SIGNING -> signingVm?.onCardDetected(isoDep)
+        // Deep link re-delivery while app is already open
+        if (intent.data?.scheme == "eidkit" && intent.data?.host == "auth") {
+            cityHallVm?.let { parseDeepLink(intent, it) }
+            this.selectedTab = TAB_KYC
+            this.cityHallActive = true
         }
+        // NFC is handled via enableReaderMode callback, not via onNewIntent
+    }
+
+    private fun parseDeepLink(intent: Intent, vm: CityHallAuthViewModel) {
+        val uri          = intent.data ?: return
+        val sessionId    = uri.getQueryParameter("session")   ?: return
+        val challengeHex = uri.getQueryParameter("challenge") ?: return
+        val callbackBase = uri.getQueryParameter("callback")  ?: return
+        vm.initFromDeepLink(sessionId, challengeHex, callbackBase)
     }
 }
