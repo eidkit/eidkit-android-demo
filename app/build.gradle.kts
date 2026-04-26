@@ -22,8 +22,8 @@ android {
         applicationId = "ro.eidkit.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7
-        versionName = "1.1.3"
+        versionCode = 8
+        versionName = "1.1.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -42,6 +42,9 @@ android {
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = ".dev"
+        }
         release {
             isMinifyEnabled = false
             signingConfig = signingConfigs.getByName("release")
@@ -70,7 +73,7 @@ android {
 }
 
 dependencies {
-    implementation("ro.eidkit:sdk-android:0.1.7")
+    implementation("ro.eidkit:sdk-android:0.1.9")
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

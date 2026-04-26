@@ -9,9 +9,11 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -29,13 +31,14 @@ import androidx.compose.ui.unit.dp
 import ro.eidkit.app.R
 import ro.eidkit.app.ui.theme.ElectricBlue
 import ro.eidkit.app.ui.theme.ElectricBlueLight
+import ro.eidkit.app.ui.theme.WarningAmber
 
 /**
  * Animated NFC tap prompt. Shows a pulsing ring around an NFC card icon with
  * instructional text. Used in scanning state for all three flow screens.
  */
 @Composable
-fun NfcPrompt(modifier: Modifier = Modifier) {
+fun NfcPrompt(modifier: Modifier = Modifier, scanning: Boolean = false) {
     val infiniteTransition = rememberInfiniteTransition(label = "nfc_pulse")
 
     val ring1Scale by infiniteTransition.animateFloat(
@@ -108,17 +111,34 @@ fun NfcPrompt(modifier: Modifier = Modifier) {
 
         Spacer(Modifier.height(24.dp))
 
-        Text(
-            text = stringResource(R.string.nfc_prompt_title),
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Center,
-        )
+        if (scanning) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_warning),
+                    contentDescription = null,
+                    tint = WarningAmber,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = stringResource(R.string.nfc_scanning_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        } else {
+            Text(
+                text = stringResource(R.string.nfc_prompt_title),
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center,
+            )
+        }
 
         Spacer(Modifier.height(8.dp))
 
         Text(
-            text = stringResource(R.string.nfc_prompt_subtitle),
+            text = stringResource(if (scanning) R.string.nfc_scanning_subtitle else R.string.nfc_prompt_subtitle),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,

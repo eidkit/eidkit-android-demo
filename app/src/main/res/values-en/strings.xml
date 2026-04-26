@@ -42,6 +42,8 @@
     <!-- NFC prompt -->
     <string name="nfc_prompt_title">Hold card to phone</string>
     <string name="nfc_prompt_subtitle">Place the back of your Romanian ID card against the NFC antenna</string>
+    <string name="nfc_scanning_title">Keep the card still</string>
+    <string name="nfc_scanning_subtitle">Reading takes a few seconds — don\'t lift or move the card</string>
 
     <!-- KYC export -->
     <string name="action_export_pdf">Export to PDF</string>

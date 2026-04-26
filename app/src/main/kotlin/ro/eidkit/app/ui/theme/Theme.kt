@@ -16,6 +16,7 @@ val OnSurface      = Color(0xFFE6EDF3)
 val OnSurfaceMuted = Color(0xFF8B949E)
 val SuccessGreen   = Color(0xFF3FB950)
 val ErrorRed       = Color(0xFFF85149)
+val WarningAmber   = Color(0xFFD29922)
 
 private val DarkColorScheme = darkColorScheme(
     primary          = ElectricBlue,

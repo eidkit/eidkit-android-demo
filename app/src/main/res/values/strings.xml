@@ -42,6 +42,8 @@
     <!-- NFC prompt -->
     <string name="nfc_prompt_title">Apropie cardul de telefon</string>
     <string name="nfc_prompt_subtitle">Plasează spatele cărții de identitate românești lângă antena NFC</string>
+    <string name="nfc_scanning_title">Ține cardul nemișcat</string>
+    <string name="nfc_scanning_subtitle">Citirea durează câteva secunde — nu ridica și nu mișca cardul</string>
 
     <!-- KYC export -->
     <string name="action_export_pdf">Exportă în PDF</string>
