@@ -233,7 +233,7 @@ private fun KycInputContent(state: KycState.Input, vm: KycViewModel) {
 
 @Composable
 private fun KycScanningContent(state: KycState.Scanning) {
-    NfcPrompt(modifier = Modifier.fillMaxWidth())
+    NfcPrompt(modifier = Modifier.fillMaxWidth(), scanning = true)
 
     Spacer(Modifier.height(8.dp))
 

@@ -246,7 +246,7 @@ private fun SigningInputContent(state: SigningState.Input, vm: SigningViewModel,
 
 @Composable
 private fun SigningScanningContent(state: SigningState.Scanning) {
-    NfcPrompt(modifier = Modifier.fillMaxWidth())
+    NfcPrompt(modifier = Modifier.fillMaxWidth(), scanning = true)
 
     Spacer(Modifier.height(8.dp))
 

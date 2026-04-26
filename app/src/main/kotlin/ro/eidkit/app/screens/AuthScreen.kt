@@ -126,7 +126,7 @@ private fun AuthInputContent(state: AuthState.Input, vm: AuthViewModel) {
 
 @Composable
 private fun AuthScanningContent(state: AuthState.Scanning) {
-    NfcPrompt(modifier = Modifier.fillMaxWidth())
+    NfcPrompt(modifier = Modifier.fillMaxWidth(), scanning = true)
 
     Spacer(Modifier.height(8.dp))
 
