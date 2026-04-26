@@ -27,3 +27,10 @@ dependencyResolutionManagement {
 
 rootProject.name = "eidkit-android-demo"
 include(":app")
+
+// Local SDK substitution — comment out to revert to Maven Central 0.1.7
+includeBuild("../eidkit-android") {
+    dependencySubstitution {
+        substitute(module("ro.eidkit:sdk-android")).using(project(":sdk"))
+    }
+}

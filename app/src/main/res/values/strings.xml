@@ -130,6 +130,16 @@
     <string name="result_signature_label">Semnătură (raw r||s, hex)</string>
     <string name="result_cert_subject_label">Certificat</string>
 
+    <!-- City Hall POC -->
+    <string name="cityhall_title">Primăria Timișoara</string>
+    <string name="cityhall_subtitle">Autentificare cu cartea de identitate</string>
+    <string name="cityhall_pin_hint">Introduceți CAN-ul și PIN-ul de pe cartea de identitate, apoi apropiați cardul de telefon.</string>
+    <string name="cityhall_posting">Se trimite identitatea…</string>
+    <string name="cityhall_success_prefix">Bun venit, </string>
+    <string name="cityhall_success_suffix">!\n\nReveniți la browser — pagina se va actualiza automat.</string>
+    <string name="cityhall_error_rescan">Sesiunea a expirat. Scanați din nou codul QR.</string>
+    <string name="cityhall_idle_hint">Scanați codul QR de pe site-ul Primăriei Timișoara pentru a iniția autentificarea.</string>
+
     <!-- Errors -->
     <string name="error_wrong_pin">PIN greșit — mai rămân %d încercări</string>
     <string name="error_pin_blocked">PIN blocat — prezintă-te la un ghișeu MAI pentru deblocare</string>
