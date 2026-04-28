@@ -28,6 +28,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
@@ -55,9 +56,12 @@ private val TmBlue = Color(0xFF1B3A82)
 @Composable
 fun CityHallAuthScreen(vm: CityHallAuthViewModel, onClose: (() -> Unit)? = null) {
     val state by vm.state.collectAsState()
+    val serviceNameRaw by vm.serviceName.collectAsState()
+
+    val serviceName = serviceNameRaw.ifBlank { stringResource(R.string.cityhall_title) }
 
     Scaffold(
-        topBar = { CityHallHeader() },
+        topBar = { CityHallHeader(serviceName) },
         containerColor = SurfaceDark,
     ) { innerPadding ->
         val focusManager = LocalFocusManager.current
@@ -81,7 +85,7 @@ fun CityHallAuthScreen(vm: CityHallAuthViewModel, onClose: (() -> Unit)? = null)
                 is CityHallAuthState.Scanning -> ScanningContent(s)
                 is CityHallAuthState.Posting  -> PostingContent()
                 is CityHallAuthState.Success  -> SuccessContent(s)
-                is CityHallAuthState.Error    -> ErrorContent(s, onRetry = { vm.retry(); onClose?.invoke() })
+                is CityHallAuthState.Error    -> ErrorContent(s, onRetry = { vm.retry() })
             }
 
             Spacer(Modifier.height(24.dp))
@@ -90,7 +94,7 @@ fun CityHallAuthScreen(vm: CityHallAuthViewModel, onClose: (() -> Unit)? = null)
 }
 
 @Composable
-private fun CityHallHeader() {
+private fun CityHallHeader(serviceName: String) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -116,7 +120,7 @@ private fun CityHallHeader() {
             }
             Column {
                 Text(
-                    text = stringResource(R.string.cityhall_title),
+                    text = serviceName,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = Color.White,
@@ -156,6 +160,8 @@ private fun IdleContent() {
 
 @Composable
 private fun InputContent(state: CityHallAuthState.Input, vm: CityHallAuthViewModel) {
+    val pinFocusRequester = remember { FocusRequester() }
+
     Text(
         text = stringResource(R.string.cityhall_pin_hint),
         style = MaterialTheme.typography.bodySmall,
@@ -168,6 +174,7 @@ private fun InputContent(state: CityHallAuthState.Input, vm: CityHallAuthViewMod
         label         = stringResource(R.string.label_can),
         placeholder   = stringResource(R.string.label_can_hint),
         maxLength     = 6,
+        onComplete    = { pinFocusRequester.requestFocus() },
         masked        = true,
     )
 
@@ -177,6 +184,7 @@ private fun InputContent(state: CityHallAuthState.Input, vm: CityHallAuthViewMod
         label             = stringResource(R.string.label_auth_pin),
         placeholder       = stringResource(R.string.label_auth_pin_hint),
         maxLength         = 4,
+        focusRequester    = pinFocusRequester,
         imeAction         = ImeAction.Done,
         dismissOnComplete = true,
         masked            = true,
@@ -199,7 +207,6 @@ private fun ScanningContent(state: CityHallAuthState.Scanning) {
         ReadEvent.VerifyingPassiveAuth,
         ReadEvent.VerifyingPin,
         ReadEvent.ReadingIdentity,
-        ReadEvent.VerifyingActiveAuth,
     )
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {

@@ -131,7 +131,7 @@
     <string name="result_cert_subject_label">Certificat</string>
 
     <!-- City Hall POC -->
-    <string name="cityhall_title">Primăria Timișoara</string>
+    <string name="cityhall_title">EidKit</string>
     <string name="cityhall_subtitle">Autentificare cu cartea de identitate</string>
     <string name="cityhall_pin_hint">Introduceți CAN-ul și PIN-ul de pe cartea de identitate, apoi apropiați cardul de telefon.</string>
     <string name="cityhall_posting">Se trimite identitatea…</string>

@@ -182,9 +182,9 @@ class MainActivity : ComponentActivity() {
 
     private fun parseDeepLink(intent: Intent, vm: CityHallAuthViewModel) {
         val uri          = intent.data ?: return
-        val sessionId    = uri.getQueryParameter("session")   ?: return
-        val challengeHex = uri.getQueryParameter("challenge") ?: return
-        val callbackBase = uri.getQueryParameter("callback")  ?: return
-        vm.initFromDeepLink(sessionId, challengeHex, callbackBase)
+        val sessionToken = uri.getQueryParameter("session")  ?: return
+        val callbackUrl  = uri.getQueryParameter("callback") ?: return
+        val serviceName  = uri.getQueryParameter("service")  ?: ""
+        vm.initFromDeepLink(sessionToken, callbackUrl, serviceName)
     }
 }
