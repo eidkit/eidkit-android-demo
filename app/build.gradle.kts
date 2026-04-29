@@ -73,7 +73,7 @@ android {
 }
 
 dependencies {
-    implementation("ro.eidkit:sdk-android:0.1.9")
+    implementation("ro.eidkit:sdk-android:0.1.10")
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

@@ -185,6 +185,7 @@ class MainActivity : ComponentActivity() {
         val sessionToken = uri.getQueryParameter("session")  ?: return
         val callbackUrl  = uri.getQueryParameter("callback") ?: return
         val serviceName  = uri.getQueryParameter("service")  ?: ""
-        vm.initFromDeepLink(sessionToken, callbackUrl, serviceName)
+        val nonce        = uri.getQueryParameter("nonce")    ?: ""
+        vm.initFromDeepLink(sessionToken, callbackUrl, serviceName, nonce)
     }
 }

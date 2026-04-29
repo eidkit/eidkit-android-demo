@@ -14,7 +14,7 @@ import org.json.JSONObject
 import ro.eidkit.app.EidKitApp
 import ro.eidkit.sdk.EidKit
 import ro.eidkit.sdk.error.CeiError
-import ro.eidkit.sdk.model.PassiveAuthStatus
+import ro.eidkit.sdk.model.ActiveAuthStatus
 import ro.eidkit.sdk.model.ReadEvent
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
@@ -29,6 +29,7 @@ sealed class CityHallAuthState {
         val sessionToken: String = "",
         val callbackUrl: String = "",
         val serviceName: String = "",
+        val nonce: String = "",
     ) : CityHallAuthState() {
         val canSubmit get() = can.length == 6 && pin.length == 4
     }
@@ -55,12 +56,13 @@ class CityHallAuthViewModel : ViewModel() {
 
     private var lastInput: CityHallAuthState.Input? = null
 
-    fun initFromDeepLink(sessionToken: String, callbackUrl: String, serviceName: String = "") {
+    fun initFromDeepLink(sessionToken: String, callbackUrl: String, serviceName: String = "", nonce: String = "") {
         _serviceName.value = serviceName
         val input = CityHallAuthState.Input(
             sessionToken = sessionToken,
             callbackUrl  = callbackUrl,
             serviceName  = serviceName,
+            nonce        = nonce,
         )
         lastInput = input
         _state.value = input
@@ -94,72 +96,100 @@ class CityHallAuthViewModel : ViewModel() {
                 var documentSeries = ""
                 var documentExpiry = ""
                 var documentIssuer = ""
-                var passiveAuthValid = false
                 var dscCertBase64  = ""
+                var rawDg1Base64   = ""
+                var rawSodBase64   = ""
+                var aaSignatureBase64 = ""
+                var aaCertBase64   = ""
+                var cardSerialNumber = ""
+                var passedOnDevicePassiveAuth = false
+                var passedOnDeviceActiveAuth  = false
 
-                EidKit.reader(can = input.can)
-                    .withPersonalData(pin = input.pin)
-                    .readFlow(isoDep)
-                    .collect { event ->
-                        when (event) {
-                            is ReadEvent.Done -> {
-                                val result = event.result
-                                val identity     = result.identity
-                                val personalData = result.personalData
+                val nonceBytes = if (input.nonce.isNotEmpty())
+                    input.nonce.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+                else null
 
-                                firstName   = identity?.firstName ?: ""
-                                familyName  = identity?.lastName  ?: ""
-                                cnp         = identity?.cnp       ?: ""
-                                dateOfBirth = identity?.dateOfBirth?.toIso8601() ?: ""
+                val reader = EidKit.reader(can = input.can).withPersonalData(pin = input.pin)
+                if (nonceBytes != null) reader.withActiveAuth(nonce = nonceBytes)
+                else reader.withActiveAuth(true)
 
-                                address        = personalData?.address          ?: ""
-                                documentIssuer = personalData?.issuingAuthority ?: ""
-                                documentExpiry = personalData?.expiryDate?.toIso8601() ?: ""
+                reader.readFlow(isoDep).collect { event ->
+                    when (event) {
+                        is ReadEvent.Done -> {
+                            val result = event.result
+                            val identity     = result.identity
+                            val personalData = result.personalData
 
-                                val rawDocNumber = personalData?.documentNumber ?: ""
-                                val splitAt = rawDocNumber.indexOfFirst { it.isDigit() }
-                                if (splitAt > 0) {
-                                    documentSeries = rawDocNumber.substring(0, splitAt)
-                                    documentNumber = rawDocNumber.substring(splitAt)
-                                } else {
-                                    documentNumber = rawDocNumber
-                                }
+                            firstName   = identity?.firstName ?: ""
+                            familyName  = identity?.lastName  ?: ""
+                            cnp         = identity?.cnp       ?: ""
+                            dateOfBirth = identity?.dateOfBirth?.toIso8601() ?: ""
 
-                                passiveAuthValid = result.passiveAuth is PassiveAuthStatus.Valid
+                            address        = personalData?.address          ?: ""
+                            documentIssuer = personalData?.issuingAuthority ?: ""
+                            documentExpiry = personalData?.expiryDate?.toIso8601() ?: ""
 
-                                val proof = result.claim?.passiveAuthProof
-                                if (proof != null) {
-                                    dscCertBase64 = proof.docSigningCert.toBase64()
-                                }
+                            val rawDocNumber = personalData?.documentNumber ?: ""
+                            val splitAt = rawDocNumber.indexOfFirst { it.isDigit() }
+                            if (splitAt > 0) {
+                                documentSeries = rawDocNumber.substring(0, splitAt)
+                                documentNumber = rawDocNumber.substring(splitAt)
+                            } else {
+                                documentNumber = rawDocNumber
                             }
-                            else -> {
-                                val current = _state.value as? CityHallAuthState.Scanning ?: return@collect
-                                val completed = if (current.activeStep != null)
-                                    current.completedSteps + current.activeStep
-                                else
-                                    current.completedSteps
-                                _state.value = CityHallAuthState.Scanning(completed, event)
+
+                            passedOnDevicePassiveAuth = result.passiveAuth is ro.eidkit.sdk.model.PassiveAuthStatus.Valid
+                            passedOnDeviceActiveAuth  = result.activeAuth is ActiveAuthStatus.Verified
+
+                            val claim = result.claim
+                            val proof = claim?.passiveAuthProof
+                            if (proof != null) {
+                                dscCertBase64 = proof.docSigningCert.toBase64()
+                                rawSodBase64  = proof.sodBytes.toBase64()
                             }
+                            rawDg1Base64 = claim?.rawDg1?.toBase64() ?: ""
+
+                            val aaProof = claim?.activeAuthProof
+                            aaSignatureBase64 = aaProof?.signature?.toBase64() ?: ""
+                            aaCertBase64      = aaProof?.certificate?.toBase64() ?: ""
+                            cardSerialNumber  = claim?.cardSerialNumber ?: ""
+                        }
+                        else -> {
+                            val current = _state.value as? CityHallAuthState.Scanning ?: return@collect
+                            val completed = if (current.activeStep != null)
+                                current.completedSteps + current.activeStep
+                            else
+                                current.completedSteps
+                            _state.value = CityHallAuthState.Scanning(completed, event)
                         }
                     }
+                }
 
                 _state.value = CityHallAuthState.Posting
 
                 postSessionComplete(
-                    callbackUrl     = input.callbackUrl,
-                    sessionToken    = input.sessionToken,
-                    cnp             = cnp,
-                    name            = "$firstName $familyName".trim(),
-                    givenName       = firstName,
-                    familyName      = familyName,
-                    birthdate       = dateOfBirth,
-                    address         = address,
-                    passiveAuthValid = passiveAuthValid,
-                    certificate     = dscCertBase64,
-                    documentNumber  = documentNumber,
-                    documentSeries  = documentSeries,
-                    documentExpiry  = documentExpiry,
-                    documentIssuer  = documentIssuer,
+                    callbackUrl              = input.callbackUrl,
+                    sessionToken             = input.sessionToken,
+                    cnp                      = cnp,
+                    name                     = "$firstName $familyName".trim(),
+                    givenName                = firstName,
+                    familyName               = familyName,
+                    birthdate                = dateOfBirth,
+                    address                  = address,
+                    certificate              = dscCertBase64,
+                    documentNumber           = documentNumber,
+                    documentSeries           = documentSeries,
+                    documentExpiry           = documentExpiry,
+                    documentIssuer           = documentIssuer,
+                    rawDg1                   = rawDg1Base64,
+                    sodBytes                 = rawSodBase64,
+                    dscCert                  = dscCertBase64,
+                    aaChallenge              = input.nonce,
+                    aaSignature              = aaSignatureBase64,
+                    aaCertificate            = aaCertBase64,
+                    cardSerialNumber         = cardSerialNumber,
+                    passedOnDevicePassiveAuth = passedOnDevicePassiveAuth,
+                    passedOnDeviceActiveAuth  = passedOnDeviceActiveAuth,
                 )
 
                 _state.value = CityHallAuthState.Success(firstName, familyName)
@@ -204,12 +234,20 @@ class CityHallAuthViewModel : ViewModel() {
         familyName: String,
         birthdate: String,
         address: String,
-        passiveAuthValid: Boolean,
         certificate: String,
         documentNumber: String,
         documentSeries: String,
         documentExpiry: String,
         documentIssuer: String,
+        rawDg1: String,
+        sodBytes: String,
+        dscCert: String,
+        aaChallenge: String,
+        aaSignature: String,
+        aaCertificate: String,
+        cardSerialNumber: String,
+        passedOnDevicePassiveAuth: Boolean,
+        passedOnDeviceActiveAuth: Boolean,
     ) = withContext(Dispatchers.IO) {
         val conn = URL(callbackUrl).openConnection() as HttpURLConnection
         conn.requestMethod = "POST"
@@ -219,19 +257,27 @@ class CityHallAuthViewModel : ViewModel() {
         conn.readTimeout    = 8_000
 
         val body = JSONObject().apply {
-            put("sessionToken",    sessionToken)
-            put("cnp",             cnp)
-            put("name",            name)
-            put("givenName",       givenName)
-            put("familyName",      familyName)
-            put("birthdate",       birthdate)
-            put("address",         address)
-            put("passiveAuthValid", passiveAuthValid)
-            put("certificate",     certificate)
-            put("documentNumber",  documentNumber)
-            put("documentSeries",  documentSeries)
-            put("documentExpiry",  documentExpiry)
-            put("documentIssuer",  documentIssuer)
+            put("sessionToken",              sessionToken)
+            put("cnp",                       cnp)
+            put("name",                      name)
+            put("givenName",                 givenName)
+            put("familyName",                familyName)
+            put("birthdate",                 birthdate)
+            put("address",                   address)
+            put("certificate",               certificate)
+            put("documentNumber",            documentNumber)
+            put("documentSeries",            documentSeries)
+            put("documentExpiry",            documentExpiry)
+            put("documentIssuer",            documentIssuer)
+            put("rawDg1",                    rawDg1)
+            put("sodBytes",                  sodBytes)
+            put("dscCert",                   dscCert)
+            put("aaChallenge",               aaChallenge)
+            put("aaSignature",               aaSignature)
+            put("aaCertificate",             aaCertificate)
+            put("cardSerialNumber",          cardSerialNumber)
+            put("passedOnDevicePassiveAuth", passedOnDevicePassiveAuth)
+            put("passedOnDeviceActiveAuth",  passedOnDeviceActiveAuth)
         }.toString()
 
         OutputStreamWriter(conn.outputStream, Charsets.UTF_8).use { it.write(body) }
