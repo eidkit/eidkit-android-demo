@@ -104,12 +104,18 @@ class CityHallAuthViewModel : ViewModel() {
                 var cardSerialNumber = ""
                 var passedOnDevicePassiveAuth = false
                 var passedOnDeviceActiveAuth  = false
+                var caTerminalPublicKeyBase64 = ""
+                var caEphemeralPrivateKeyBase64 = ""
+                var caSharedSecretXBase64 = ""
+                var rawDg14Base64 = ""
 
                 val nonceBytes = if (input.nonce.isNotEmpty())
                     input.nonce.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
                 else null
 
-                val reader = EidKit.reader(can = input.can).withPersonalData(pin = input.pin)
+                val reader = EidKit.reader(can = input.can)
+                    .withPersonalData(pin = input.pin)
+                    .withChipAuth()
                 if (nonceBytes != null) reader.withActiveAuth(nonce = nonceBytes)
                 else reader.withActiveAuth(true)
 
@@ -153,6 +159,12 @@ class CityHallAuthViewModel : ViewModel() {
                             aaSignatureBase64 = aaProof?.signature?.toBase64() ?: ""
                             aaCertBase64      = aaProof?.certificate?.toBase64() ?: ""
                             cardSerialNumber  = claim?.cardSerialNumber ?: ""
+
+                            val caProof = claim?.chipAuthProof
+                            caTerminalPublicKeyBase64   = caProof?.terminalPublicKey?.toBase64() ?: ""
+                            caEphemeralPrivateKeyBase64 = caProof?.ephemeralPrivateKey?.toBase64() ?: ""
+                            caSharedSecretXBase64       = caProof?.sharedSecretX?.toBase64() ?: ""
+                            rawDg14Base64               = caProof?.rawDg14?.toBase64() ?: ""
                         }
                         else -> {
                             val current = _state.value as? CityHallAuthState.Scanning ?: return@collect
@@ -190,6 +202,10 @@ class CityHallAuthViewModel : ViewModel() {
                     cardSerialNumber         = cardSerialNumber,
                     passedOnDevicePassiveAuth = passedOnDevicePassiveAuth,
                     passedOnDeviceActiveAuth  = passedOnDeviceActiveAuth,
+                    caTerminalPublicKey      = caTerminalPublicKeyBase64,
+                    caEphemeralPrivateKey    = caEphemeralPrivateKeyBase64,
+                    caSharedSecretX          = caSharedSecretXBase64,
+                    rawDg14                  = rawDg14Base64,
                 )
 
                 _state.value = CityHallAuthState.Success(firstName, familyName)
@@ -248,6 +264,10 @@ class CityHallAuthViewModel : ViewModel() {
         cardSerialNumber: String,
         passedOnDevicePassiveAuth: Boolean,
         passedOnDeviceActiveAuth: Boolean,
+        caTerminalPublicKey: String,
+        caEphemeralPrivateKey: String,
+        caSharedSecretX: String,
+        rawDg14: String,
     ) = withContext(Dispatchers.IO) {
         val conn = URL(callbackUrl).openConnection() as HttpURLConnection
         conn.requestMethod = "POST"
@@ -278,6 +298,10 @@ class CityHallAuthViewModel : ViewModel() {
             put("cardSerialNumber",          cardSerialNumber)
             put("passedOnDevicePassiveAuth", passedOnDevicePassiveAuth)
             put("passedOnDeviceActiveAuth",  passedOnDeviceActiveAuth)
+            put("caTerminalPublicKey",       caTerminalPublicKey)
+            put("caEphemeralPrivateKey",     caEphemeralPrivateKey)
+            put("caSharedSecretX",           caSharedSecretX)
+            put("rawDg14",                   rawDg14)
         }.toString()
 
         OutputStreamWriter(conn.outputStream, Charsets.UTF_8).use { it.write(body) }
