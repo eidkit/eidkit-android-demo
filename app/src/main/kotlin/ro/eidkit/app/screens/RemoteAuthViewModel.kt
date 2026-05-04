@@ -20,8 +20,8 @@ import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
 
-sealed class CityHallAuthState {
-    object Idle : CityHallAuthState()
+sealed class RemoteAuthState {
+    object Idle : RemoteAuthState()
 
     data class Input(
         val can: String = "",
@@ -30,35 +30,35 @@ sealed class CityHallAuthState {
         val callbackUrl: String = "",
         val serviceName: String = "",
         val nonce: String = "",
-    ) : CityHallAuthState() {
+    ) : RemoteAuthState() {
         val canSubmit get() = can.length == 6 && pin.length == 4
     }
 
     data class Scanning(
         val completedSteps: List<ReadEvent>,
         val activeStep: ReadEvent?,
-    ) : CityHallAuthState()
+    ) : RemoteAuthState()
 
-    object Posting : CityHallAuthState()
+    object Posting : RemoteAuthState()
 
-    data class Success(val firstName: String, val lastName: String) : CityHallAuthState()
+    data class Success(val firstName: String, val lastName: String) : RemoteAuthState()
 
-    data class Error(val message: String) : CityHallAuthState()
+    data class Error(val message: String) : RemoteAuthState()
 }
 
-class CityHallAuthViewModel : ViewModel() {
+class RemoteAuthViewModel : ViewModel() {
 
-    private val _state = MutableStateFlow<CityHallAuthState>(CityHallAuthState.Idle)
-    val state: StateFlow<CityHallAuthState> = _state.asStateFlow()
+    private val _state = MutableStateFlow<RemoteAuthState>(RemoteAuthState.Idle)
+    val state: StateFlow<RemoteAuthState> = _state.asStateFlow()
 
     private val _serviceName = MutableStateFlow("")
     val serviceName: StateFlow<String> = _serviceName.asStateFlow()
 
-    private var lastInput: CityHallAuthState.Input? = null
+    private var lastInput: RemoteAuthState.Input? = null
 
     fun initFromDeepLink(sessionToken: String, callbackUrl: String, serviceName: String = "", nonce: String = "") {
         _serviceName.value = serviceName
-        val input = CityHallAuthState.Input(
+        val input = RemoteAuthState.Input(
             sessionToken = sessionToken,
             callbackUrl  = callbackUrl,
             serviceName  = serviceName,
@@ -69,20 +69,20 @@ class CityHallAuthViewModel : ViewModel() {
     }
 
     fun onCanChange(v: String) {
-        val s = _state.value as? CityHallAuthState.Input ?: return
+        val s = _state.value as? RemoteAuthState.Input ?: return
         _state.value = s.copy(can = v)
     }
 
     fun onPinChange(v: String) {
-        val s = _state.value as? CityHallAuthState.Input ?: return
+        val s = _state.value as? RemoteAuthState.Input ?: return
         _state.value = s.copy(pin = v)
     }
 
     fun onCardDetected(isoDep: IsoDep) {
-        val input = _state.value as? CityHallAuthState.Input ?: return
+        val input = _state.value as? RemoteAuthState.Input ?: return
         if (!input.canSubmit) return
 
-        _state.value = CityHallAuthState.Scanning(emptyList(), null)
+        _state.value = RemoteAuthState.Scanning(emptyList(), null)
 
         viewModelScope.launch {
             val span = EidKitApp.tracer.spanBuilder("cityhall_auth").startSpan()
@@ -167,17 +167,17 @@ class CityHallAuthViewModel : ViewModel() {
                             rawDg14Base64               = caProof?.rawDg14?.toBase64() ?: ""
                         }
                         else -> {
-                            val current = _state.value as? CityHallAuthState.Scanning ?: return@collect
+                            val current = _state.value as? RemoteAuthState.Scanning ?: return@collect
                             val completed = if (current.activeStep != null)
                                 current.completedSteps + current.activeStep
                             else
                                 current.completedSteps
-                            _state.value = CityHallAuthState.Scanning(completed, event)
+                            _state.value = RemoteAuthState.Scanning(completed, event)
                         }
                     }
                 }
 
-                _state.value = CityHallAuthState.Posting
+                _state.value = RemoteAuthState.Posting
 
                 postSessionComplete(
                     callbackUrl              = input.callbackUrl,
@@ -208,26 +208,26 @@ class CityHallAuthViewModel : ViewModel() {
                     rawDg14                  = rawDg14Base64,
                 )
 
-                _state.value = CityHallAuthState.Success(firstName, familyName)
+                _state.value = RemoteAuthState.Success(firstName, familyName)
                 span.setStatus(StatusCode.OK)
 
             } catch (e: CeiError.WrongPin) {
-                _state.value = CityHallAuthState.Error("wrong_pin:${e.attemptsRemaining}")
+                _state.value = RemoteAuthState.Error("wrong_pin:${e.attemptsRemaining}")
                 span.recordException(e); span.setStatus(StatusCode.ERROR)
             } catch (e: CeiError.PinBlocked) {
-                _state.value = CityHallAuthState.Error("pin_blocked")
+                _state.value = RemoteAuthState.Error("pin_blocked")
                 span.recordException(e); span.setStatus(StatusCode.ERROR)
             } catch (e: CeiError.CardLost) {
-                _state.value = CityHallAuthState.Error("card_lost")
+                _state.value = RemoteAuthState.Error("card_lost")
                 span.recordException(e); span.setStatus(StatusCode.ERROR)
             } catch (e: CeiError.PaceFailure) {
-                _state.value = CityHallAuthState.Error("pace_failed")
+                _state.value = RemoteAuthState.Error("pace_failed")
                 span.recordException(e); span.setStatus(StatusCode.ERROR)
             } catch (e: CeiError) {
-                _state.value = CityHallAuthState.Error("generic:${e.message}")
+                _state.value = RemoteAuthState.Error("generic:${e.message}")
                 span.recordException(e); span.setStatus(StatusCode.ERROR)
             } catch (e: Exception) {
-                _state.value = CityHallAuthState.Error("network:${e.message}")
+                _state.value = RemoteAuthState.Error("network:${e.message}")
                 span.recordException(e); span.setStatus(StatusCode.ERROR)
             } finally {
                 span.end()
@@ -236,7 +236,7 @@ class CityHallAuthViewModel : ViewModel() {
     }
 
     fun retry() {
-        _state.value = lastInput ?: CityHallAuthState.Idle
+        _state.value = lastInput ?: RemoteAuthState.Idle
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────

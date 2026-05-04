@@ -1,5 +1,7 @@
 package ro.eidkit.app.screens
 
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -18,19 +20,27 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -54,14 +64,14 @@ import ro.eidkit.sdk.model.ReadEvent
 private val TmBlue = Color(0xFF1B3A82)
 
 @Composable
-fun CityHallAuthScreen(vm: CityHallAuthViewModel, onClose: (() -> Unit)? = null) {
+fun RemoteAuthScreen(vm: RemoteAuthViewModel, onClose: (() -> Unit)? = null) {
     val state by vm.state.collectAsState()
     val serviceNameRaw by vm.serviceName.collectAsState()
 
     val serviceName = serviceNameRaw.ifBlank { stringResource(R.string.cityhall_title) }
 
     Scaffold(
-        topBar = { CityHallHeader(serviceName) },
+        topBar = { RemoteAuthHeader(serviceName) },
         containerColor = SurfaceDark,
     ) { innerPadding ->
         val focusManager = LocalFocusManager.current
@@ -80,12 +90,12 @@ fun CityHallAuthScreen(vm: CityHallAuthViewModel, onClose: (() -> Unit)? = null)
             Spacer(Modifier.height(8.dp))
 
             when (val s = state) {
-                is CityHallAuthState.Idle     -> IdleContent()
-                is CityHallAuthState.Input    -> InputContent(s, vm)
-                is CityHallAuthState.Scanning -> ScanningContent(s)
-                is CityHallAuthState.Posting  -> PostingContent()
-                is CityHallAuthState.Success  -> SuccessContent(s)
-                is CityHallAuthState.Error    -> ErrorContent(s, onRetry = { vm.retry() })
+                is RemoteAuthState.Idle     -> IdleContent()
+                is RemoteAuthState.Input    -> InputContent(s, vm)
+                is RemoteAuthState.Scanning -> ScanningContent(s)
+                is RemoteAuthState.Posting  -> PostingContent()
+                is RemoteAuthState.Success  -> SuccessContent(s)
+                is RemoteAuthState.Error    -> ErrorContent(s, onRetry = { vm.retry() })
             }
 
             Spacer(Modifier.height(24.dp))
@@ -94,7 +104,7 @@ fun CityHallAuthScreen(vm: CityHallAuthViewModel, onClose: (() -> Unit)? = null)
 }
 
 @Composable
-private fun CityHallHeader(serviceName: String) {
+private fun RemoteAuthHeader(serviceName: String) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -103,7 +113,6 @@ private fun CityHallHeader(serviceName: String) {
             .padding(horizontal = 20.dp, vertical = 14.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            // Shield logo placeholder
             Box(
                 modifier = Modifier
                     .size(36.dp)
@@ -158,9 +167,51 @@ private fun IdleContent() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun InputContent(state: CityHallAuthState.Input, vm: CityHallAuthViewModel) {
+private fun InputContent(state: RemoteAuthState.Input, vm: RemoteAuthViewModel) {
     val pinFocusRequester = remember { FocusRequester() }
+    val context = LocalContext.current
+    var showCanInfo by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    if (showCanInfo) {
+        ModalBottomSheet(
+            onDismissRequest = { showCanInfo = false },
+            sheetState = sheetState,
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.can_info_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = stringResource(R.string.can_info_body),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                val bitmap = remember {
+                    runCatching {
+                        context.assets.open("can_location.jpg").use { BitmapFactory.decodeStream(it) }
+                    }.getOrNull()
+                }
+                bitmap?.let {
+                    Image(
+                        bitmap = it.asImageBitmap(),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+        }
+    }
 
     Text(
         text = stringResource(R.string.cityhall_pin_hint),
@@ -176,6 +227,19 @@ private fun InputContent(state: CityHallAuthState.Input, vm: CityHallAuthViewMod
         maxLength     = 6,
         onComplete    = { pinFocusRequester.requestFocus() },
         masked        = true,
+        labelTrailing = {
+            IconButton(
+                onClick  = { showCanInfo = true },
+                modifier = Modifier.size(20.dp),
+            ) {
+                Icon(
+                    painter            = painterResource(R.drawable.ic_info),
+                    contentDescription = stringResource(R.string.can_info_title),
+                    tint               = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier           = Modifier.size(16.dp),
+                )
+            }
+        },
     )
 
     PinField(
@@ -191,13 +255,13 @@ private fun InputContent(state: CityHallAuthState.Input, vm: CityHallAuthViewMod
     )
 
     if (state.canSubmit) {
-        NfcPrompt(modifier = Modifier.fillMaxWidth())
+        NfcPrompt(modifier = Modifier.fillMaxWidth(), scanning = true)
     }
 }
 
 @Composable
-private fun ScanningContent(state: CityHallAuthState.Scanning) {
-    NfcPrompt(modifier = Modifier.fillMaxWidth())
+private fun ScanningContent(state: RemoteAuthState.Scanning) {
+    NfcPrompt(modifier = Modifier.fillMaxWidth(), scanning = true)
 
     Spacer(Modifier.height(8.dp))
 
@@ -239,7 +303,7 @@ private fun PostingContent() {
 }
 
 @Composable
-private fun SuccessContent(state: CityHallAuthState.Success) {
+private fun SuccessContent(state: RemoteAuthState.Success) {
     ResultCard(
         title = stringResource(R.string.cityhall_success_prefix) +
                 "${state.firstName} ${state.lastName}" +
@@ -249,7 +313,7 @@ private fun SuccessContent(state: CityHallAuthState.Success) {
 }
 
 @Composable
-private fun ErrorContent(state: CityHallAuthState.Error, onRetry: () -> Unit) {
+private fun ErrorContent(state: RemoteAuthState.Error, onRetry: () -> Unit) {
     val message = when {
         state.message.startsWith("wrong_pin:") -> {
             val remaining = state.message.substringAfter("wrong_pin:").toIntOrNull() ?: 0

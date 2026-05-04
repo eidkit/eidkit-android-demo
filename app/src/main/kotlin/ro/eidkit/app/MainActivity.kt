@@ -26,8 +26,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ro.eidkit.app.screens.AuthScreen
 import ro.eidkit.app.screens.AuthViewModel
-import ro.eidkit.app.screens.CityHallAuthScreen
-import ro.eidkit.app.screens.CityHallAuthViewModel
+import ro.eidkit.app.screens.RemoteAuthScreen
+import ro.eidkit.app.screens.RemoteAuthViewModel
 import ro.eidkit.app.screens.KycScreen
 import ro.eidkit.app.screens.KycViewModel
 import ro.eidkit.app.screens.SigningScreen
@@ -53,7 +53,7 @@ class MainActivity : ComponentActivity() {
     private var kycVm: KycViewModel? = null
     private var authVm: AuthViewModel? = null
     private var signingVm: SigningViewModel? = null
-    private var cityHallVm: CityHallAuthViewModel? = null
+    private var cityHallVm: RemoteAuthViewModel? = null
 
     private var selectedTab: Int = TAB_KYC
     private val _cityHallActive = mutableStateOf(false)
@@ -76,7 +76,7 @@ class MainActivity : ComponentActivity() {
                 val kycVmInstance: KycViewModel = viewModel()
                 val authVmInstance: AuthViewModel = viewModel()
                 val signingVmInstance: SigningViewModel = viewModel()
-                val cityHallVmInstance: CityHallAuthViewModel = viewModel()
+                val cityHallVmInstance: RemoteAuthViewModel = viewModel()
 
                 kycVm      = kycVmInstance
                 authVm     = authVmInstance
@@ -94,7 +94,7 @@ class MainActivity : ComponentActivity() {
                 if (cityHallActive) {
                     // Full-screen city hall auth — no bottom bar
                     Box {
-                        CityHallAuthScreen(vm = cityHallVmInstance, onClose = {
+                        RemoteAuthScreen(vm = cityHallVmInstance, onClose = {
                             this@MainActivity.cityHallActive = false
                             selectedTab = TAB_KYC
                         })
@@ -180,7 +180,7 @@ class MainActivity : ComponentActivity() {
         // NFC is handled via enableReaderMode callback, not via onNewIntent
     }
 
-    private fun parseDeepLink(intent: Intent, vm: CityHallAuthViewModel) {
+    private fun parseDeepLink(intent: Intent, vm: RemoteAuthViewModel) {
         val uri          = intent.data ?: return
         val sessionToken = uri.getQueryParameter("session")  ?: return
         val callbackUrl  = uri.getQueryParameter("callback") ?: return
