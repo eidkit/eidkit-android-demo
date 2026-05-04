@@ -17,16 +17,22 @@ import androidx.compose.material3.Button
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.OutlinedCard
-
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import ro.eidkit.app.BiometricStore
 import ro.eidkit.app.R
 import ro.eidkit.app.ui.theme.ElectricBlueLight
 import ro.eidkit.app.ui.theme.SurfaceBorder
@@ -38,6 +44,9 @@ fun HomeScreen(
     onAuth: () -> Unit,
     onSigning: () -> Unit,
 ) {
+    val context = LocalContext.current
+    var hasCredentials by remember { mutableStateOf(BiometricStore.hasCredentials(context)) }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 32.dp),
@@ -56,6 +65,20 @@ fun HomeScreen(
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                if (hasCredentials) {
+                    Spacer(Modifier.height(8.dp))
+                    TextButton(
+                        onClick = {
+                            BiometricStore.clear(context)
+                            hasCredentials = false
+                        },
+                    ) {
+                        Text(
+                            text  = stringResource(R.string.bio_forget),
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
             }
         }
 

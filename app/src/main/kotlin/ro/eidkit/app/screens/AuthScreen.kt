@@ -15,19 +15,24 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import ro.eidkit.app.BiometricStore
+import ro.eidkit.app.ui.components.findActivity
 import ro.eidkit.app.R
 import ro.eidkit.app.ui.components.NfcPrompt
 import ro.eidkit.app.ui.components.PinField
+import ro.eidkit.app.ui.components.SaveCredentialsDialog
 import ro.eidkit.app.ui.components.ResultCard
 import ro.eidkit.app.ui.components.ResultRow
 import ro.eidkit.app.ui.components.StepState
@@ -42,6 +47,23 @@ fun AuthScreen(
     vm: AuthViewModel = viewModel(),
 ) {
     val state by vm.state.collectAsState()
+
+    val activity = LocalContext.current.findActivity()
+    val successState = state as? AuthState.Success
+
+    val context = LocalContext.current
+    if (successState?.saveDialog != null && activity != null && !BiometricStore.neverAsk(context)) {
+        SaveCredentialsDialog(
+            activity     = activity,
+            state        = successState.saveDialog,
+            onToggleCan  = { vm.onSaveDialogToggle(saveCan = it) },
+            onTogglePin  = { vm.onSaveDialogToggle(savePin = it) },
+            onTogglePin2 = {},
+            onConfirm    = { a -> vm.confirmSave(a) },
+            onDismiss    = vm::dismissSaveDialog,
+            onNeverAsk   = { vm.neverAskSave(context) },
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -92,6 +114,8 @@ fun AuthScreen(
 private fun AuthInputContent(state: AuthState.Input, vm: AuthViewModel) {
     val canFocusRequester = remember { FocusRequester() }
     val pinFocusRequester = remember { FocusRequester() }
+    val activity = LocalContext.current.findActivity()
+    LaunchedEffect(Unit) { activity?.let { vm.tryBiometricLoad(it) } }
     Text(
         text  = stringResource(R.string.auth_pin_hint),
         style = MaterialTheme.typography.bodySmall,
@@ -102,21 +126,23 @@ private fun AuthInputContent(state: AuthState.Input, vm: AuthViewModel) {
         value             = state.can,
         onValueChange     = vm::onCanChange,
         label             = stringResource(R.string.label_can),
-        placeholder       = stringResource(R.string.label_can_hint),
         maxLength         = 6,
         focusRequester    = canFocusRequester,
         onComplete        = { pinFocusRequester.requestFocus() },
+        maskable          = true,
+        onClear           = { vm.onCanChange("") },
     )
 
     PinField(
         value             = state.pin,
         onValueChange     = vm::onPinChange,
         label             = stringResource(R.string.label_auth_pin),
-        placeholder       = stringResource(R.string.label_auth_pin_hint),
         maxLength         = 4,
         imeAction         = ImeAction.Done,
         focusRequester    = pinFocusRequester,
         dismissOnComplete = true,
+        maskable          = true,
+        onClear           = { vm.onPinChange("") },
     )
 
     if (state.canSubmit) {

@@ -1,6 +1,7 @@
 package ro.eidkit.app.screens
 
 import android.nfc.tech.IsoDep
+import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.opentelemetry.api.trace.StatusCode
@@ -11,6 +12,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import ro.eidkit.app.BiometricStore
+import ro.eidkit.app.StoreOp
 import ro.eidkit.app.EidKitApp
 import ro.eidkit.sdk.EidKit
 import ro.eidkit.sdk.error.CeiError
@@ -41,7 +44,11 @@ sealed class RemoteAuthState {
 
     object Posting : RemoteAuthState()
 
-    data class Success(val firstName: String, val lastName: String) : RemoteAuthState()
+    data class Success(
+        val firstName: String,
+        val lastName: String,
+        val saveDialog: SaveDialogState? = null,
+    ) : RemoteAuthState()
 
     data class Error(val message: String) : RemoteAuthState()
 }
@@ -55,6 +62,28 @@ class RemoteAuthViewModel : ViewModel() {
     val serviceName: StateFlow<String> = _serviceName.asStateFlow()
 
     private var lastInput: RemoteAuthState.Input? = null
+    private var snapshot = Triple<String?, String?, String?>(null, null, null)
+    private var pendingSaveDialog: SaveDialogState? = null
+
+    // ── Biometric load ────────────────────────────────────────────────────────
+
+    fun tryBiometricLoad(activity: FragmentActivity) {
+        if (!BiometricStore.hasCredentials(activity)) return
+        BiometricStore.load(
+            activity  = activity,
+            onSuccess = { can, pin, _ ->
+                snapshot = Triple(can, pin, null)
+                val s = _state.value as? RemoteAuthState.Input ?: return@load
+                _state.value = s.copy(
+                    can = can ?: s.can,
+                    pin = pin ?: s.pin,
+                )
+            },
+            onFail = {},
+        )
+    }
+
+    // ── Deep link init ────────────────────────────────────────────────────────
 
     fun initFromDeepLink(sessionToken: String, callbackUrl: String, serviceName: String = "", nonce: String = "") {
         _serviceName.value = serviceName
@@ -78,9 +107,15 @@ class RemoteAuthViewModel : ViewModel() {
         _state.value = s.copy(pin = v)
     }
 
+    // ── NFC ───────────────────────────────────────────────────────────────────
+
     fun onCardDetected(isoDep: IsoDep) {
         val input = _state.value as? RemoteAuthState.Input ?: return
         if (!input.canSubmit) return
+
+        val scannedCan = input.can
+        val scannedPin = input.pin
+        pendingSaveDialog = buildSaveDialog(scannedCan, scannedPin)
 
         _state.value = RemoteAuthState.Scanning(emptyList(), null)
 
@@ -113,8 +148,8 @@ class RemoteAuthViewModel : ViewModel() {
                     input.nonce.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
                 else null
 
-                val reader = EidKit.reader(can = input.can)
-                    .withPersonalData(pin = input.pin)
+                val reader = EidKit.reader(can = scannedCan)
+                    .withPersonalData(pin = scannedPin)
                     .withChipAuth()
                 if (nonceBytes != null) reader.withActiveAuth(nonce = nonceBytes)
                 else reader.withActiveAuth(true)
@@ -208,7 +243,12 @@ class RemoteAuthViewModel : ViewModel() {
                     rawDg14                  = rawDg14Base64,
                 )
 
-                _state.value = RemoteAuthState.Success(firstName, familyName)
+                _state.value = RemoteAuthState.Success(
+                    firstName  = firstName,
+                    lastName   = familyName,
+                    saveDialog = pendingSaveDialog,
+                )
+                pendingSaveDialog = null
                 span.setStatus(StatusCode.OK)
 
             } catch (e: CeiError.WrongPin) {
@@ -235,11 +275,66 @@ class RemoteAuthViewModel : ViewModel() {
         }
     }
 
+    // ── Save dialog ───────────────────────────────────────────────────────────
+
+    fun onSaveDialogToggle(saveCan: Boolean? = null, savePin: Boolean? = null) {
+        val s = _state.value as? RemoteAuthState.Success ?: return
+        val d = s.saveDialog ?: return
+        _state.value = s.copy(saveDialog = d.copy(
+            saveCan = saveCan ?: d.saveCan,
+            savePin = savePin ?: d.savePin,
+        ))
+    }
+
+    fun dismissSaveDialog() {
+        val s = _state.value as? RemoteAuthState.Success ?: return
+        _state.value = s.copy(saveDialog = null)
+    }
+
+    fun neverAskSave(context: android.content.Context) {
+        BiometricStore.setNeverAsk(context)
+        dismissSaveDialog()
+    }
+
+    fun confirmSave(activity: FragmentActivity) {
+        val s = _state.value as? RemoteAuthState.Success ?: return
+        val d = s.saveDialog ?: return
+        BiometricStore.save(
+            activity = activity,
+            can      = StoreOp.Write(if (d.saveCan) d.scannedCan else null),
+            pin      = StoreOp.Write(if (d.savePin) d.scannedPin else null),
+            pin2     = StoreOp.Skip,
+            onDone   = {
+                _state.value = (_state.value as? RemoteAuthState.Success)?.copy(saveDialog = null) ?: _state.value
+                snapshot = Triple(
+                    if (d.saveCan) d.scannedCan else null,
+                    if (d.savePin) d.scannedPin else null,
+                    snapshot.third,
+                )
+            },
+        )
+    }
+
+    // ── Retry ─────────────────────────────────────────────────────────────────
+
     fun retry() {
         _state.value = lastInput ?: RemoteAuthState.Idle
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
+
+    private fun buildSaveDialog(scannedCan: String, scannedPin: String): SaveDialogState? {
+        val canChanged = scannedCan != (snapshot.first  ?: "")
+        val pinChanged = scannedPin != (snapshot.second ?: "")
+        if (!canChanged && !pinChanged) return null
+        return SaveDialogState(
+            scannedCan  = scannedCan,
+            scannedPin  = scannedPin,
+            saveCan     = snapshot.first  != null || canChanged,
+            savePin     = snapshot.second != null || pinChanged,
+            showPin2Row = false,
+        )
+    }
 
     private suspend fun postSessionComplete(
         callbackUrl: String,
@@ -310,7 +405,6 @@ class RemoteAuthViewModel : ViewModel() {
         if (code != 200) throw Exception("Session complete failed: HTTP $code")
     }
 
-    // DDMMYYYY → YYYY-MM-DD
     private fun String.toIso8601(): String {
         if (length != 8) return this
         return "${substring(4, 8)}-${substring(2, 4)}-${substring(0, 2)}"

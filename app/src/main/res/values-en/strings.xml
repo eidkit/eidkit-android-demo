@@ -34,6 +34,7 @@
     <string name="result_issuing_authority_label">Issuing authority</string>
     <string name="result_signature_image_label">Handwritten signature</string>
     <string name="action_scan_card">Scan Card</string>
+    <string name="action_clear">Clear</string>
     <string name="action_try_again">Try Again</string>
     <string name="action_back">Back</string>
     <string name="action_copy">Copy</string>
@@ -139,6 +140,19 @@
     <string name="cityhall_success_suffix">!\n\nReturn to your browser — the page will update automatically.</string>
     <string name="cityhall_error_rescan">Session expired. Scan the QR code again.</string>
     <string name="cityhall_idle_hint">Scan the QR code on the website to start authentication.</string>
+
+    <!-- Biometric storage -->
+    <string name="bio_prompt_title">Biometric confirmation</string>
+    <string name="bio_prompt_subtitle">Authenticate to access saved credentials</string>
+    <string name="bio_save_title">Quick biometric access</string>
+    <string name="bio_save_message">Choose what to save:</string>
+    <string name="bio_save_can">CAN (6 digits)</string>
+    <string name="bio_save_pin_auth">Authentication PIN (4 digits)</string>
+    <string name="bio_save_pin_sign">Signing PIN (6 digits)</string>
+    <string name="bio_save_yes">Save</string>
+    <string name="bio_save_no">No thanks</string>
+    <string name="bio_forget">Forget saved credentials</string>
+    <string name="bio_save_never">Don\'t ask again</string>
 
     <!-- Errors -->
     <string name="error_wrong_pin">Wrong PIN — %d attempt(s) remaining</string>

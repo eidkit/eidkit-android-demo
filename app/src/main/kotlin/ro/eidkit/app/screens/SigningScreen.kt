@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -32,12 +34,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import ro.eidkit.app.BiometricStore
+import ro.eidkit.app.ui.components.SaveCredentialsDialog
+import ro.eidkit.app.ui.components.findActivity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -63,6 +70,21 @@ fun SigningScreen(
 ) {
     val state by vm.state.collectAsState()
     val context = LocalContext.current
+    val activity = context.findActivity()
+    val successState = state as? SigningState.Success
+
+    if (successState?.saveDialog != null && activity != null && !BiometricStore.neverAsk(context)) {
+        SaveCredentialsDialog(
+            activity     = activity,
+            state        = successState.saveDialog,
+            onToggleCan  = { vm.onSaveDialogToggle(saveCan  = it) },
+            onTogglePin  = {},
+            onTogglePin2 = { vm.onSaveDialogToggle(savePin2 = it) },
+            onConfirm    = { a -> vm.confirmSave(a) },
+            onDismiss    = vm::dismissSaveDialog,
+            onNeverAsk   = vm::neverAskSave,
+        )
+    }
 
     // Launcher for picking a PDF to sign
     val signedPrefix = stringResource(R.string.signing_filename_prefix)
@@ -183,6 +205,10 @@ private fun SigningDocumentPickerContent(onPick: () -> Unit) {
 private fun SigningInputContent(state: SigningState.Input, vm: SigningViewModel, onChangePdf: () -> Unit) {
     val canFocusRequester = remember { FocusRequester() }
     val pinFocusRequester = remember { FocusRequester() }
+    val context = LocalContext.current
+    val activity = context.findActivity()
+    LaunchedEffect(Unit) { activity?.let { vm.tryBiometricLoad(it) } }
+    var hasCredentials by remember { mutableStateOf(BiometricStore.hasCredentials(context)) }
     // Selected document card
     OutlinedCard(
         colors = CardDefaults.outlinedCardColors(containerColor = SurfaceCard),
@@ -222,22 +248,44 @@ private fun SigningInputContent(state: SigningState.Input, vm: SigningViewModel,
         value             = state.can,
         onValueChange     = vm::onCanChange,
         label             = stringResource(R.string.label_can),
-        placeholder       = stringResource(R.string.label_can_hint),
         maxLength         = 6,
         focusRequester    = canFocusRequester,
         onComplete        = { pinFocusRequester.requestFocus() },
+        maskable          = true,
+        onClear           = { vm.onCanChange("") },
     )
 
     PinField(
         value             = state.pin,
         onValueChange     = vm::onPinChange,
         label             = stringResource(R.string.label_signing_pin),
-        placeholder       = stringResource(R.string.label_signing_pin_hint),
         maxLength         = 6,
         imeAction         = ImeAction.Done,
         focusRequester    = pinFocusRequester,
         dismissOnComplete = true,
+        maskable          = true,
+        onClear           = { vm.onPinChange("") },
     )
+
+    if (hasCredentials) {
+        Box(modifier = Modifier.fillMaxWidth()) {
+            TextButton(
+                onClick = {
+                    BiometricStore.clear(context)
+                    hasCredentials = false
+                    vm.onCanChange("")
+                    vm.onPinChange("")
+                },
+                modifier = Modifier.align(Alignment.CenterEnd),
+            ) {
+                Text(
+                    text  = stringResource(R.string.bio_forget),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
+    }
 
     if (state.canSubmit) {
         NfcPrompt(modifier = Modifier.fillMaxWidth())

@@ -74,6 +74,10 @@ android {
 
 dependencies {
     implementation("ro.eidkit:sdk-android:0.1.12")
+    implementation("androidx.appcompat:appcompat:1.7.0")
+    implementation("androidx.security:security-crypto:1.0.0")
+    implementation("androidx.biometric:biometric:1.1.0")
+    implementation("androidx.fragment:fragment-ktx:1.8.6")
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

@@ -29,12 +29,16 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import ro.eidkit.app.BiometricStore
+import ro.eidkit.app.ui.components.SaveCredentialsDialog
+import ro.eidkit.app.ui.components.findActivity
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
@@ -69,6 +73,22 @@ fun RemoteAuthScreen(vm: RemoteAuthViewModel, onClose: (() -> Unit)? = null) {
     val serviceNameRaw by vm.serviceName.collectAsState()
 
     val serviceName = serviceNameRaw.ifBlank { stringResource(R.string.cityhall_title) }
+    val activity = LocalContext.current.findActivity()
+    val successState = state as? RemoteAuthState.Success
+
+    val context = LocalContext.current
+    if (successState?.saveDialog != null && activity != null && !BiometricStore.neverAsk(context)) {
+        SaveCredentialsDialog(
+            activity     = activity,
+            state        = successState.saveDialog,
+            onToggleCan  = { vm.onSaveDialogToggle(saveCan = it) },
+            onTogglePin  = { vm.onSaveDialogToggle(savePin = it) },
+            onTogglePin2 = {},
+            onConfirm    = { a -> vm.confirmSave(a) },
+            onDismiss    = vm::dismissSaveDialog,
+            onNeverAsk   = { vm.neverAskSave(context) },
+        )
+    }
 
     Scaffold(
         topBar = { RemoteAuthHeader(serviceName) },
@@ -173,6 +193,9 @@ private fun InputContent(state: RemoteAuthState.Input, vm: RemoteAuthViewModel) 
     val pinFocusRequester = remember { FocusRequester() }
     val context = LocalContext.current
     var showCanInfo by remember { mutableStateOf(false) }
+    val activity = context.findActivity()
+    LaunchedEffect(Unit) { activity?.let { vm.tryBiometricLoad(it) } }
+    var hasCredentials by remember { mutableStateOf(BiometricStore.hasCredentials(context)) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     if (showCanInfo) {
@@ -223,10 +246,10 @@ private fun InputContent(state: RemoteAuthState.Input, vm: RemoteAuthViewModel) 
         value         = state.can,
         onValueChange = vm::onCanChange,
         label         = stringResource(R.string.label_can),
-        placeholder   = stringResource(R.string.label_can_hint),
         maxLength     = 6,
         onComplete    = { pinFocusRequester.requestFocus() },
-        masked        = true,
+        maskable      = true,
+        onClear       = { vm.onCanChange("") },
         labelTrailing = {
             IconButton(
                 onClick  = { showCanInfo = true },
@@ -246,13 +269,33 @@ private fun InputContent(state: RemoteAuthState.Input, vm: RemoteAuthViewModel) 
         value             = state.pin,
         onValueChange     = vm::onPinChange,
         label             = stringResource(R.string.label_auth_pin),
-        placeholder       = stringResource(R.string.label_auth_pin_hint),
         maxLength         = 4,
         focusRequester    = pinFocusRequester,
         imeAction         = ImeAction.Done,
         dismissOnComplete = true,
-        masked            = true,
+        maskable          = true,
+        onClear           = { vm.onPinChange("") },
     )
+
+    if (hasCredentials) {
+        androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxWidth()) {
+            androidx.compose.material3.TextButton(
+                onClick = {
+                    BiometricStore.clear(context)
+                    hasCredentials = false
+                    vm.onCanChange("")
+                    vm.onPinChange("")
+                },
+                modifier = Modifier.align(Alignment.CenterEnd),
+            ) {
+                Text(
+                    text  = stringResource(R.string.bio_forget),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
+    }
 
     if (state.canSubmit) {
         NfcPrompt(modifier = Modifier.fillMaxWidth(), scanning = true)

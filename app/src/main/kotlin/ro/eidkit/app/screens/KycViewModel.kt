@@ -3,12 +3,15 @@ package ro.eidkit.app.screens
 import android.app.Application
 import android.net.Uri
 import android.nfc.tech.IsoDep
+import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import ro.eidkit.app.BiometricStore
+import ro.eidkit.app.StoreOp
 import ro.eidkit.app.pdf.KycPdfGenerator
 import ro.eidkit.sdk.EidKit
 import ro.eidkit.sdk.error.CeiError
@@ -19,8 +22,8 @@ import java.time.LocalDateTime
 sealed class ExportState {
     data object Idle      : ExportState()
     data object Exporting : ExportState()
-    data class  Done(val uri: Uri)            : ExportState()
-    data class  Failed(val message: String)   : ExportState()
+    data class  Done(val uri: Uri)          : ExportState()
+    data class  Failed(val message: String) : ExportState()
 }
 
 sealed class KycState {
@@ -43,6 +46,7 @@ sealed class KycState {
     data class Success(
         val result: ReadResult,
         val exportState: ExportState = ExportState.Idle,
+        val saveDialog: SaveDialogState? = null,
     ) : KycState()
 
     data class Error(val message: String) : KycState()
@@ -54,6 +58,29 @@ class KycViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _state = MutableStateFlow<KycState>(KycState.Input())
     val state: StateFlow<KycState> = _state.asStateFlow()
+
+    // What was in the store when this screen opened (null = not stored)
+    private var snapshot = Triple<String?, String?, String?>(null, null, null)
+
+    // ── Biometric load ────────────────────────────────────────────────────────
+
+    fun tryBiometricLoad(activity: FragmentActivity) {
+        if (!BiometricStore.hasCredentials(activity)) return
+        BiometricStore.load(
+            activity  = activity,
+            onSuccess = { can, pin, _ ->
+                snapshot = Triple(can, pin, null)
+                val s = _state.value as? KycState.Input ?: return@load
+                _state.value = s.copy(
+                    can = can ?: s.can,
+                    pin = pin ?: s.pin,
+                )
+            },
+            onFail = {},
+        )
+    }
+
+    // ── Input changes ─────────────────────────────────────────────────────────
 
     fun onCanChange(v: String) {
         val s = _state.value as? KycState.Input ?: return
@@ -75,10 +102,14 @@ class KycViewModel(app: Application) : AndroidViewModel(app) {
         _state.value = s.copy(includeSignature = v)
     }
 
-    /** Called from MainActivity when a card is tapped while this screen is active. */
+    // ── NFC ───────────────────────────────────────────────────────────────────
+
     fun onCardDetected(isoDep: IsoDep) {
         val input = _state.value as? KycState.Input ?: return
         if (!input.canSubmit) return
+
+        val scannedCan = input.can
+        val scannedPin = input.pin
 
         _state.value = KycState.Scanning(
             completedSteps   = emptyList(),
@@ -89,15 +120,20 @@ class KycViewModel(app: Application) : AndroidViewModel(app) {
 
         viewModelScope.launch {
             try {
-                EidKit.reader(can = input.can)
-                    .withPersonalData(pin = input.pin)
+                EidKit.reader(can = scannedCan)
+                    .withPersonalData(pin = scannedPin)
                     .withActiveAuth()
                     .withPhoto(input.includePhoto)
                     .withSignatureImage(input.includeSignature)
                     .readFlow(isoDep)
                     .collect { event ->
                         when (event) {
-                            is ReadEvent.Done -> _state.value = KycState.Success(event.result)
+                            is ReadEvent.Done -> {
+                                _state.value = KycState.Success(
+                                    result     = event.result,
+                                    saveDialog = buildSaveDialog(scannedCan, scannedPin),
+                                )
+                            }
                             else -> {
                                 val current = _state.value as? KycState.Scanning ?: return@collect
                                 val completed = if (current.activeStep != null)
@@ -122,9 +158,51 @@ class KycViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // ── Save dialog ───────────────────────────────────────────────────────────
+
+    fun onSaveDialogToggle(saveCan: Boolean? = null, savePin: Boolean? = null) {
+        val s = _state.value as? KycState.Success ?: return
+        val d = s.saveDialog ?: return
+        _state.value = s.copy(saveDialog = d.copy(
+            saveCan = saveCan ?: d.saveCan,
+            savePin = savePin ?: d.savePin,
+        ))
+    }
+
+    fun dismissSaveDialog() {
+        val s = _state.value as? KycState.Success ?: return
+        _state.value = s.copy(saveDialog = null)
+    }
+
+    fun neverAskSave() {
+        BiometricStore.setNeverAsk(getApplication())
+        dismissSaveDialog()
+    }
+
+    fun confirmSave(activity: FragmentActivity) {
+        val s = _state.value as? KycState.Success ?: return
+        val d = s.saveDialog ?: return
+        BiometricStore.save(
+            activity = activity,
+            can      = StoreOp.Write(if (d.saveCan) d.scannedCan else null),
+            pin      = StoreOp.Write(if (d.savePin) d.scannedPin else null),
+            pin2     = StoreOp.Skip,
+            onDone   = {
+                _state.value = (_state.value as? KycState.Success)?.copy(saveDialog = null) ?: _state.value
+                snapshot = Triple(
+                    if (d.saveCan) d.scannedCan else null,
+                    if (d.savePin) d.scannedPin else null,
+                    snapshot.third,
+                )
+            },
+        )
+    }
+
+    // ── PDF export ────────────────────────────────────────────────────────────
+
     fun exportToPdf() {
         val success = _state.value as? KycState.Success ?: return
-        if (success.exportState is ExportState.Exporting) return  // already running
+        if (success.exportState is ExportState.Exporting) return
 
         _state.value = success.copy(exportState = ExportState.Exporting)
 
@@ -141,6 +219,22 @@ class KycViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun retry() {
+        snapshot = Triple(null, null, null)
         _state.value = KycState.Input()
+    }
+
+    // ── Private ───────────────────────────────────────────────────────────────
+
+    private fun buildSaveDialog(scannedCan: String, scannedPin: String): SaveDialogState? {
+        val canChanged = scannedCan != (snapshot.first  ?: "")
+        val pinChanged = scannedPin != (snapshot.second ?: "")
+        if (!canChanged && !pinChanged) return null
+        return SaveDialogState(
+            scannedCan  = scannedCan,
+            scannedPin  = scannedPin,
+            saveCan     = snapshot.first  != null || canChanged,
+            savePin     = snapshot.second != null || pinChanged,
+            showPin2Row = false,
+        )
     }
 }

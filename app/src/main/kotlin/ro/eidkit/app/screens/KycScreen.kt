@@ -40,6 +40,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
+import ro.eidkit.app.BiometricStore
+import ro.eidkit.app.ui.components.SaveCredentialsDialog
+import ro.eidkit.app.ui.components.findActivity
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
@@ -59,10 +62,6 @@ import ro.eidkit.sdk.model.ActiveAuthStatus
 import ro.eidkit.sdk.model.PassiveAuthStatus
 import ro.eidkit.sdk.model.ReadEvent
 
-// Flip to true locally when recording the demo video — masks CAN/PIN with dots and auto-fills dummy values.
-// Never commit as true.
-private const val DEMO_MODE = false
-
 @Composable
 fun KycScreen(
     vm: KycViewModel = viewModel(),
@@ -70,6 +69,21 @@ fun KycScreen(
     val state by vm.state.collectAsState()
 
     val successState = state as? KycState.Success
+    val activity = LocalContext.current.findActivity()
+
+    val context = LocalContext.current
+    if (successState?.saveDialog != null && activity != null && !BiometricStore.neverAsk(context)) {
+        SaveCredentialsDialog(
+            activity     = activity,
+            state        = successState.saveDialog,
+            onToggleCan  = { vm.onSaveDialogToggle(saveCan = it) },
+            onTogglePin  = { vm.onSaveDialogToggle(savePin = it) },
+            onTogglePin2 = {},
+            onConfirm    = { a -> vm.confirmSave(a) },
+            onDismiss    = vm::dismissSaveDialog,
+            onNeverAsk   = vm::neverAskSave,
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -132,6 +146,10 @@ private fun KycInputContent(state: KycState.Input, vm: KycViewModel) {
     val pinFocusRequester = remember { FocusRequester() }
     val context = LocalContext.current
     var showCanInfo by remember { mutableStateOf(false) }
+
+    val activity = context.findActivity()
+    LaunchedEffect(Unit) { activity?.let { vm.tryBiometricLoad(it) } }
+    var hasCredentials by remember { mutableStateOf(BiometricStore.hasCredentials(context)) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     if (showCanInfo) {
@@ -173,15 +191,15 @@ private fun KycInputContent(state: KycState.Input, vm: KycViewModel) {
     }
 
     PinField(
-        value              = state.can,
-        onValueChange      = vm::onCanChange,
-        label              = stringResource(R.string.label_can),
-        placeholder        = stringResource(R.string.label_can_hint),
-        maxLength          = 6,
-        focusRequester     = canFocusRequester,
-        onComplete         = { pinFocusRequester.requestFocus() },
-        masked             = DEMO_MODE,
-        labelTrailing      = {
+        value          = state.can,
+        onValueChange  = vm::onCanChange,
+        label          = stringResource(R.string.label_can),
+        maxLength      = 6,
+        focusRequester = canFocusRequester,
+        onComplete     = { pinFocusRequester.requestFocus() },
+        maskable       = true,
+        onClear        = { vm.onCanChange("") },
+        labelTrailing  = {
             IconButton(
                 onClick  = { showCanInfo = true },
                 modifier = Modifier.size(20.dp),
@@ -197,16 +215,36 @@ private fun KycInputContent(state: KycState.Input, vm: KycViewModel) {
     )
 
     PinField(
-        value              = state.pin,
-        onValueChange      = vm::onPinChange,
-        label              = stringResource(R.string.label_auth_pin),
-        placeholder        = stringResource(R.string.label_auth_pin_hint),
-        maxLength          = 4,
-        imeAction          = ImeAction.Done,
-        focusRequester     = pinFocusRequester,
-        dismissOnComplete  = true,
-        masked             = DEMO_MODE,
+        value             = state.pin,
+        onValueChange     = vm::onPinChange,
+        label             = stringResource(R.string.label_auth_pin),
+        maxLength         = 4,
+        imeAction         = ImeAction.Done,
+        focusRequester    = pinFocusRequester,
+        dismissOnComplete = true,
+        maskable          = true,
+        onClear           = { vm.onPinChange("") },
     )
+
+    if (hasCredentials) {
+        androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxWidth()) {
+            androidx.compose.material3.TextButton(
+                onClick = {
+                    BiometricStore.clear(context)
+                    hasCredentials = false
+                    vm.onCanChange("")
+                    vm.onPinChange("")
+                },
+                modifier = Modifier.align(Alignment.CenterEnd),
+            ) {
+                Text(
+                    text  = stringResource(R.string.bio_forget),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
+    }
 
     Row(verticalAlignment = Alignment.CenterVertically) {
         Checkbox(checked = state.includePhoto, onCheckedChange = vm::onPhotoToggle)

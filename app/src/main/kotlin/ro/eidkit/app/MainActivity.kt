@@ -5,7 +5,7 @@ import android.nfc.NfcAdapter
 import android.nfc.Tag
 import android.nfc.tech.IsoDep
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
@@ -46,7 +46,7 @@ private const val TAB_SIGNING = 2
  * NFC routing: [onNewIntent] dispatches the card tap to whichever tab is currently selected.
  * Deep link routing: eidkit://auth intents switch to the city hall tab and init the session.
  */
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
 
     private val nfcAdapter: NfcAdapter? by lazy { NfcAdapter.getDefaultAdapter(this) }
 
