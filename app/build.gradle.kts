@@ -22,8 +22,8 @@ android {
         applicationId = "ro.eidkit.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 8
-        versionName = "1.1.4"
+        versionCode = 9
+        versionName = "1.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
