@@ -22,7 +22,7 @@ android {
         applicationId = "ro.eidkit.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 10
+        versionCode = 12
         versionName = "1.3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -47,6 +47,12 @@ android {
         release {
             isMinifyEnabled = false
             signingConfig = signingConfigs.getByName("release")
+        }
+    }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = false
         }
     }
 
