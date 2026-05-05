@@ -54,6 +54,7 @@ class MainActivity : AppCompatActivity() {
     private var authVm: AuthViewModel? = null
     private var signingVm: SigningViewModel? = null
     private var cityHallVm: RemoteAuthViewModel? = null
+    private var pendingDeepLinkIntent: Intent? = null
 
     private var selectedTab: Int = TAB_KYC
     private val _cityHallActive = mutableStateOf(false)
@@ -61,10 +62,14 @@ class MainActivity : AppCompatActivity() {
         get() = _cityHallActive.value
         set(v) { _cityHallActive.value = v }
 
+    private fun isEidkitDeepLink(uri: android.net.Uri?) =
+        (uri?.scheme == "eidkit" && uri.host == "auth") ||
+        (uri?.scheme == "https" && uri.host == "idp.eidkit.ro" && uri.path?.startsWith("/auth") == true) ||
+        (BuildConfig.DEBUG && uri?.path?.startsWith("/auth") == true)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (savedInstanceState == null &&
-            intent?.data?.scheme == "eidkit" && intent?.data?.host == "auth") {
+        if (savedInstanceState == null && isEidkitDeepLink(intent?.data)) {
             this.cityHallActive = true
             this.selectedTab = TAB_KYC
         }
@@ -87,7 +92,9 @@ class MainActivity : AppCompatActivity() {
                 // Init city hall VM from deep link exactly once after first composition
                 LaunchedEffect(Unit) {
                     if (cityHallActive) {
-                        intent?.let { parseDeepLink(it, cityHallVmInstance) }
+                        val pending = pendingDeepLinkIntent ?: intent
+                        pending?.let { parseDeepLink(it, cityHallVmInstance) }
+                        pendingDeepLinkIntent = null
                     }
                 }
 
@@ -172,8 +179,13 @@ class MainActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         // Deep link re-delivery while app is already open
-        if (intent.data?.scheme == "eidkit" && intent.data?.host == "auth") {
-            cityHallVm?.let { parseDeepLink(intent, it) }
+        if (isEidkitDeepLink(intent.data)) {
+            val vm = cityHallVm
+            if (vm != null) {
+                parseDeepLink(intent, vm)
+            } else {
+                pendingDeepLinkIntent = intent
+            }
             this.selectedTab = TAB_KYC
             this.cityHallActive = true
         }

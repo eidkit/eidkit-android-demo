@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application>
+        <activity
+            android:name=".MainActivity"
+            tools:node="merge">
+            <!-- Debug App Links — points at local webhook (192.168.0.39:3001).
+                 assetlinks.json is served from that host, so OS verification works
+                 against the debug keystore without touching production. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="http" android:host="192.168.0.39" android:port="3001" android:pathPrefix="/auth" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>
