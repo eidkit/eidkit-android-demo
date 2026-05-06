@@ -63,6 +63,7 @@ class MainActivity : AppCompatActivity() {
         set(v) { _cityHallActive.value = v }
 
     private fun isEidkitDeepLink(uri: android.net.Uri?) =
+        (uri?.scheme == "eidkit" && uri.host == "auth") ||
         (uri?.scheme == "https" && uri.host == "idp.eidkit.ro" && uri.path == "/auth") ||
         (BuildConfig.DEBUG && uri?.path == "/auth")
 
