@@ -63,13 +63,12 @@ class MainActivity : AppCompatActivity() {
         set(v) { _cityHallActive.value = v }
 
     private fun isEidkitDeepLink(uri: android.net.Uri?) =
-        (uri?.scheme == "eidkit" && uri.host == "auth") ||
-        (uri?.scheme == "https" && uri.host == "idp.eidkit.ro" && uri.path?.startsWith("/auth") == true) ||
-        (BuildConfig.DEBUG && uri?.path?.startsWith("/auth") == true)
+        (uri?.scheme == "https" && uri.host == "idp.eidkit.ro" && uri.path == "/auth") ||
+        (BuildConfig.DEBUG && uri?.path == "/auth")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (savedInstanceState == null && isEidkitDeepLink(intent?.data)) {
+if (savedInstanceState == null && isEidkitDeepLink(intent?.data)) {
             this.cityHallActive = true
             this.selectedTab = TAB_KYC
         }
@@ -178,8 +177,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        // Deep link re-delivery while app is already open
-        if (isEidkitDeepLink(intent.data)) {
+if (isEidkitDeepLink(intent.data)) {
             val vm = cityHallVm
             if (vm != null) {
                 parseDeepLink(intent, vm)

@@ -347,12 +347,20 @@ private fun PostingContent() {
 
 @Composable
 private fun SuccessContent(state: RemoteAuthState.Success) {
+    val activity = LocalContext.current.findActivity()
     ResultCard(
         title = stringResource(R.string.cityhall_success_prefix) +
                 "${state.firstName} ${state.lastName}" +
                 stringResource(R.string.cityhall_success_suffix),
         isError = false,
     )
+    Spacer(Modifier.height(8.dp))
+    androidx.compose.material3.Button(
+        onClick = { activity?.finish() },
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(stringResource(R.string.cityhall_back_to_browser))
+    }
 }
 
 @Composable
