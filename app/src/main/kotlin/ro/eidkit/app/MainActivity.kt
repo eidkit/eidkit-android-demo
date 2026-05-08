@@ -193,10 +193,11 @@ if (isEidkitDeepLink(intent.data)) {
 
     private fun parseDeepLink(intent: Intent, vm: RemoteAuthViewModel) {
         val uri          = intent.data ?: return
-        val sessionToken = uri.getQueryParameter("session")  ?: return
-        val callbackUrl  = uri.getQueryParameter("callback") ?: return
-        val serviceName  = uri.getQueryParameter("service")  ?: ""
-        val nonce        = uri.getQueryParameter("nonce")    ?: ""
-        vm.initFromDeepLink(sessionToken, callbackUrl, serviceName, nonce)
+        val sessionToken = uri.getQueryParameter("session")     ?: return
+        val callbackUrl  = uri.getQueryParameter("callback")    ?: return
+        val serviceName  = uri.getQueryParameter("service")     ?: ""
+        val nonce        = uri.getQueryParameter("nonce")       ?: ""
+        val traceparent  = uri.getQueryParameter("traceparent")
+        vm.initFromDeepLink(sessionToken, callbackUrl, serviceName, nonce, traceparent)
     }
 }

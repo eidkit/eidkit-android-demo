@@ -5,6 +5,10 @@ import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.opentelemetry.api.trace.StatusCode
+import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator
+import io.opentelemetry.context.Context
+import io.opentelemetry.context.propagation.TextMapGetter
+import io.opentelemetry.extension.kotlin.asContextElement
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,6 +37,7 @@ sealed class RemoteAuthState {
         val callbackUrl: String = "",
         val serviceName: String = "",
         val nonce: String = "",
+        val traceparent: String? = null,
     ) : RemoteAuthState() {
         val canSubmit get() = can.length == 6 && pin.length == 4
     }
@@ -54,6 +59,13 @@ sealed class RemoteAuthState {
 }
 
 class RemoteAuthViewModel : ViewModel() {
+
+    companion object {
+        private val MapGetter = object : TextMapGetter<Map<String, String>> {
+            override fun keys(carrier: Map<String, String>) = carrier.keys
+            override fun get(carrier: Map<String, String>?, key: String) = carrier?.get(key)
+        }
+    }
 
     private val _state = MutableStateFlow<RemoteAuthState>(RemoteAuthState.Idle)
     val state: StateFlow<RemoteAuthState> = _state.asStateFlow()
@@ -85,13 +97,14 @@ class RemoteAuthViewModel : ViewModel() {
 
     // ── Deep link init ────────────────────────────────────────────────────────
 
-    fun initFromDeepLink(sessionToken: String, callbackUrl: String, serviceName: String = "", nonce: String = "") {
+    fun initFromDeepLink(sessionToken: String, callbackUrl: String, serviceName: String = "", nonce: String = "", traceparent: String? = null) {
         _serviceName.value = serviceName
         val input = RemoteAuthState.Input(
             sessionToken = sessionToken,
             callbackUrl  = callbackUrl,
             serviceName  = serviceName,
             nonce        = nonce,
+            traceparent  = traceparent,
         )
         lastInput = input
         _state.value = input
@@ -119,8 +132,15 @@ class RemoteAuthViewModel : ViewModel() {
 
         _state.value = RemoteAuthState.Scanning(emptyList(), null)
 
-        viewModelScope.launch {
-            val span = EidKitApp.tracer.spanBuilder("cityhall_auth").startSpan()
+        val parentCtx = input.traceparent
+            ?.let { W3CTraceContextPropagator.getInstance().extract(Context.root(), mapOf("traceparent" to it), MapGetter) }
+            ?: Context.current()
+        val remoteAuthSpan = EidKitApp.tracer.spanBuilder("remote_auth")
+            .setParent(parentCtx)
+            .startSpan()
+        val spanCtx = parentCtx.with(remoteAuthSpan)
+
+        viewModelScope.launch(spanCtx.asContextElement()) {
             try {
                 var firstName      = ""
                 var familyName     = ""
@@ -249,28 +269,28 @@ class RemoteAuthViewModel : ViewModel() {
                     saveDialog = pendingSaveDialog,
                 )
                 pendingSaveDialog = null
-                span.setStatus(StatusCode.OK)
+                remoteAuthSpan.setStatus(StatusCode.OK)
 
             } catch (e: CeiError.WrongPin) {
                 _state.value = RemoteAuthState.Error("wrong_pin:${e.attemptsRemaining}")
-                span.recordException(e); span.setStatus(StatusCode.ERROR)
+                remoteAuthSpan.recordException(e); remoteAuthSpan.setStatus(StatusCode.ERROR)
             } catch (e: CeiError.PinBlocked) {
                 _state.value = RemoteAuthState.Error("pin_blocked")
-                span.recordException(e); span.setStatus(StatusCode.ERROR)
+                remoteAuthSpan.recordException(e); remoteAuthSpan.setStatus(StatusCode.ERROR)
             } catch (e: CeiError.CardLost) {
                 _state.value = RemoteAuthState.Error("card_lost")
-                span.recordException(e); span.setStatus(StatusCode.ERROR)
+                remoteAuthSpan.recordException(e); remoteAuthSpan.setStatus(StatusCode.ERROR)
             } catch (e: CeiError.PaceFailure) {
                 _state.value = RemoteAuthState.Error("pace_failed")
-                span.recordException(e); span.setStatus(StatusCode.ERROR)
+                remoteAuthSpan.recordException(e); remoteAuthSpan.setStatus(StatusCode.ERROR)
             } catch (e: CeiError) {
                 _state.value = RemoteAuthState.Error("generic:${e.message}")
-                span.recordException(e); span.setStatus(StatusCode.ERROR)
+                remoteAuthSpan.recordException(e); remoteAuthSpan.setStatus(StatusCode.ERROR)
             } catch (e: Exception) {
                 _state.value = RemoteAuthState.Error("network:${e.message}")
-                span.recordException(e); span.setStatus(StatusCode.ERROR)
+                remoteAuthSpan.recordException(e); remoteAuthSpan.setStatus(StatusCode.ERROR)
             } finally {
-                span.end()
+                remoteAuthSpan.end()
             }
         }
     }
@@ -370,6 +390,16 @@ class RemoteAuthViewModel : ViewModel() {
         conn.doOutput = true
         conn.connectTimeout = 8_000
         conn.readTimeout    = 8_000
+        // Propagate trace context so POST /session/complete appears in the same Sentry trace
+        val spanCtx = io.opentelemetry.api.trace.Span.current().spanContext
+        if (spanCtx.isValid) {
+            val traceId  = spanCtx.traceId
+            val spanId   = spanCtx.spanId
+            val flags    = spanCtx.traceFlags.asHex()
+            val sampled  = if (spanCtx.traceFlags.isSampled) "1" else "0"
+            conn.setRequestProperty("traceparent", "00-$traceId-$spanId-$flags")
+            conn.setRequestProperty("sentry-trace", "$traceId-$spanId-$sampled")
+        }
 
         val body = JSONObject().apply {
             put("sessionToken",              sessionToken)

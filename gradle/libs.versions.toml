@@ -30,6 +30,7 @@ espressoCore = "3.6.1"
 opentelemetry-sdk             = { group = "io.opentelemetry",       name = "opentelemetry-sdk",    version.ref = "opentelemetry" }
 opentelemetry-exporter-logging = { group = "io.opentelemetry",      name = "opentelemetry-exporter-logging", version.ref = "opentelemetry" }
 opentelemetry-exporter-otlp   = { group = "io.opentelemetry",       name = "opentelemetry-exporter-otlp",    version.ref = "opentelemetry" }
+opentelemetry-extension-kotlin = { group = "io.opentelemetry",      name = "opentelemetry-extension-kotlin", version.ref = "opentelemetry" }
 # Sentry
 sentry-android                = { group = "io.sentry",              name = "sentry-android",       version.ref = "sentry" }
 
