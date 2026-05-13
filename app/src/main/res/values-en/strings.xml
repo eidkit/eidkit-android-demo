@@ -60,6 +60,10 @@
     <!-- Auth screen -->
     <string name="auth_title">Authentication</string>
     <string name="auth_pin_hint">This is the 4-digit PIN set during card activation at MAI (not the signing PIN)</string>
+    <string name="auth_sso_callout_title">Full authentication needs more</string>
+    <string name="auth_sso_callout_body">This demo proves the chip is genuine, but doesn\'t bind the read identity to the signing chip. An attacker with the victim\'s CAN could split the proof. EidKit SSO closes this with server-side Chip Authentication.</string>
+    <string name="auth_sso_callout_cta_demo">Try the SSO demo →</string>
+    <string name="auth_sso_callout_cta_docs">SSO documentation</string>
 
     <!-- Signing screen -->
     <string name="signing_title">Document Signing</string>

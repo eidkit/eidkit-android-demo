@@ -60,6 +60,10 @@
     <!-- Auth screen -->
     <string name="auth_title">Autentificare</string>
     <string name="auth_pin_hint">Acesta este PIN-ul de 4 cifre setat la activarea cărții la MAI (nu PIN-ul de semnare)</string>
+    <string name="auth_sso_callout_title">Autentificare completă necesită mai mult</string>
+    <string name="auth_sso_callout_body">Această demonstrație dovedește că cipul este autentic, dar nu leagă identitatea citită de cipul care a semnat. Un atacator cu CAN-ul victimei ar putea separa dovezile. EidKit SSO rezolvă asta cu Chip Authentication server-side.</string>
+    <string name="auth_sso_callout_cta_demo">Încearcă demo-ul SSO →</string>
+    <string name="auth_sso_callout_cta_docs">Documentație SSO</string>
 
     <!-- Signing screen -->
     <string name="signing_title">Semnare Documente</string>
