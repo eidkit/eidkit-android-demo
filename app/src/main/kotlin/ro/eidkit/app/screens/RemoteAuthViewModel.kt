@@ -1,6 +1,7 @@
 package ro.eidkit.app.screens
 
 import android.nfc.tech.IsoDep
+import android.util.Base64
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -160,7 +161,6 @@ class RemoteAuthViewModel : ViewModel() {
                 var passedOnDevicePassiveAuth = false
                 var passedOnDeviceActiveAuth  = false
                 var caTerminalPublicKeyBase64 = ""
-                var caEphemeralPrivateKeyBase64 = ""
                 var caSharedSecretXBase64 = ""
                 var rawDg14Base64 = ""
 
@@ -168,9 +168,30 @@ class RemoteAuthViewModel : ViewModel() {
                     input.nonce.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
                 else null
 
+                // Capture tracer + parent span now — the withChipAuth callback runs on
+                // Dispatchers.IO inside the SDK where Span.current() may be empty.
+                val tracer = EidKitApp.tracer
+                val caParentSpan = io.opentelemetry.api.trace.Span.current()
+
+                // v2 server-key CA: relay rawDg14 to server, get back Q_terminal.
+                // Card stays idle on the reader during the HTTP call (~200–500 ms).
                 val reader = EidKit.reader(can = scannedCan)
                     .withPersonalData(pin = scannedPin)
-                    .withChipAuth()
+                    .withChipAuth { rawDg14 ->
+                        val caSpan = tracer.spanBuilder("ca_prepare")
+                            .setParent(io.opentelemetry.context.Context.current().with(caParentSpan))
+                            .startSpan()
+                        try {
+                            postCaPrepare(
+                                callbackUrl  = input.callbackUrl,
+                                sessionToken = input.sessionToken,
+                                rawDg14      = rawDg14,
+                                spanCtx      = caSpan.spanContext,
+                            )
+                        } finally {
+                            caSpan.end()
+                        }
+                    }
                 if (nonceBytes != null) reader.withActiveAuth(nonce = nonceBytes)
                 else reader.withActiveAuth(true)
 
@@ -216,10 +237,9 @@ class RemoteAuthViewModel : ViewModel() {
                             cardSerialNumber  = claim?.cardSerialNumber ?: ""
 
                             val caProof = claim?.chipAuthProof
-                            caTerminalPublicKeyBase64   = caProof?.terminalPublicKey?.toBase64() ?: ""
-                            caEphemeralPrivateKeyBase64 = caProof?.ephemeralPrivateKey?.toBase64() ?: ""
-                            caSharedSecretXBase64       = caProof?.sharedSecretX?.toBase64() ?: ""
-                            rawDg14Base64               = caProof?.rawDg14?.toBase64() ?: ""
+                            caTerminalPublicKeyBase64 = caProof?.terminalPublicKey?.toBase64() ?: ""
+                            caSharedSecretXBase64     = caProof?.sharedSecretX?.toBase64() ?: ""
+                            rawDg14Base64             = caProof?.rawDg14?.toBase64() ?: ""
                         }
                         else -> {
                             val current = _state.value as? RemoteAuthState.Scanning ?: return@collect
@@ -235,32 +255,31 @@ class RemoteAuthViewModel : ViewModel() {
                 _state.value = RemoteAuthState.Posting
 
                 postSessionComplete(
-                    callbackUrl              = input.callbackUrl,
-                    sessionToken             = input.sessionToken,
-                    cnp                      = cnp,
-                    name                     = "$firstName $familyName".trim(),
-                    givenName                = firstName,
-                    familyName               = familyName,
-                    birthdate                = dateOfBirth,
-                    address                  = address,
-                    certificate              = dscCertBase64,
-                    documentNumber           = documentNumber,
-                    documentSeries           = documentSeries,
-                    documentExpiry           = documentExpiry,
-                    documentIssuer           = documentIssuer,
-                    rawDg1                   = rawDg1Base64,
-                    sodBytes                 = rawSodBase64,
-                    dscCert                  = dscCertBase64,
-                    aaChallenge              = input.nonce,
-                    aaSignature              = aaSignatureBase64,
-                    aaCertificate            = aaCertBase64,
-                    cardSerialNumber         = cardSerialNumber,
+                    callbackUrl               = input.callbackUrl,
+                    sessionToken              = input.sessionToken,
+                    cnp                       = cnp,
+                    name                      = "$firstName $familyName".trim(),
+                    givenName                 = firstName,
+                    familyName                = familyName,
+                    birthdate                 = dateOfBirth,
+                    address                   = address,
+                    certificate               = dscCertBase64,
+                    documentNumber            = documentNumber,
+                    documentSeries            = documentSeries,
+                    documentExpiry            = documentExpiry,
+                    documentIssuer            = documentIssuer,
+                    rawDg1                    = rawDg1Base64,
+                    sodBytes                  = rawSodBase64,
+                    dscCert                   = dscCertBase64,
+                    aaChallenge               = input.nonce,
+                    aaSignature               = aaSignatureBase64,
+                    aaCertificate             = aaCertBase64,
+                    cardSerialNumber          = cardSerialNumber,
                     passedOnDevicePassiveAuth = passedOnDevicePassiveAuth,
                     passedOnDeviceActiveAuth  = passedOnDeviceActiveAuth,
-                    caTerminalPublicKey      = caTerminalPublicKeyBase64,
-                    caEphemeralPrivateKey    = caEphemeralPrivateKeyBase64,
-                    caSharedSecretX          = caSharedSecretXBase64,
-                    rawDg14                  = rawDg14Base64,
+                    caTerminalPublicKey       = caTerminalPublicKeyBase64,
+                    caSharedSecretX           = caSharedSecretXBase64,
+                    rawDg14                   = rawDg14Base64,
                 )
 
                 _state.value = RemoteAuthState.Success(
@@ -356,6 +375,44 @@ class RemoteAuthViewModel : ViewModel() {
         )
     }
 
+    private suspend fun postCaPrepare(
+        callbackUrl: String,
+        sessionToken: String,
+        rawDg14: ByteArray,
+        spanCtx: io.opentelemetry.api.trace.SpanContext? = null,
+    ): ByteArray? = withContext(Dispatchers.IO) {
+        val url = callbackUrl.replace("/session/complete", "/v2/session/ca-prepare")
+        val conn = URL(url).openConnection() as HttpURLConnection
+        conn.requestMethod = "POST"
+        conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+        conn.doOutput = true
+        conn.connectTimeout = 8_000
+        conn.readTimeout    = 8_000
+        val ctx = spanCtx ?: io.opentelemetry.api.trace.Span.current().spanContext
+        if (ctx.isValid) {
+            val traceId = ctx.traceId
+            val spanId  = ctx.spanId
+            val flags   = ctx.traceFlags.asHex()
+            val sampled = if (ctx.traceFlags.isSampled) "1" else "0"
+            conn.setRequestProperty("traceparent", "00-$traceId-$spanId-$flags")
+            conn.setRequestProperty("sentry-trace", "$traceId-$spanId-$sampled")
+        }
+
+        val body = JSONObject().apply {
+            put("sessionToken", sessionToken)
+            put("rawDg14", Base64.encodeToString(rawDg14, Base64.NO_WRAP))
+        }.toString()
+        OutputStreamWriter(conn.outputStream, Charsets.UTF_8).use { it.write(body) }
+
+        val code = conn.responseCode
+        if (code != 200) return@withContext null
+
+        val response = JSONObject(conn.inputStream.bufferedReader().readText())
+        val caTerminalPublicKeyB64 = response.optString("caTerminalPublicKey").takeIf { it.isNotEmpty() }
+            ?: return@withContext null
+        Base64.decode(caTerminalPublicKeyB64, Base64.NO_WRAP)
+    }
+
     private suspend fun postSessionComplete(
         callbackUrl: String,
         sessionToken: String,
@@ -380,17 +437,17 @@ class RemoteAuthViewModel : ViewModel() {
         passedOnDevicePassiveAuth: Boolean,
         passedOnDeviceActiveAuth: Boolean,
         caTerminalPublicKey: String,
-        caEphemeralPrivateKey: String,
         caSharedSecretX: String,
         rawDg14: String,
     ) = withContext(Dispatchers.IO) {
-        val conn = URL(callbackUrl).openConnection() as HttpURLConnection
+        val url = callbackUrl.replace("/session/complete", "/v2/session/complete")
+        val conn = URL(url).openConnection() as HttpURLConnection
         conn.requestMethod = "POST"
         conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
         conn.doOutput = true
         conn.connectTimeout = 8_000
         conn.readTimeout    = 8_000
-        // Propagate trace context so POST /session/complete appears in the same Sentry trace
+        // Propagate trace context so POST /v2/session/complete appears in the same Sentry trace
         val spanCtx = io.opentelemetry.api.trace.Span.current().spanContext
         if (spanCtx.isValid) {
             val traceId  = spanCtx.traceId
@@ -424,7 +481,6 @@ class RemoteAuthViewModel : ViewModel() {
             put("passedOnDevicePassiveAuth", passedOnDevicePassiveAuth)
             put("passedOnDeviceActiveAuth",  passedOnDeviceActiveAuth)
             put("caTerminalPublicKey",       caTerminalPublicKey)
-            put("caEphemeralPrivateKey",     caEphemeralPrivateKey)
             put("caSharedSecretX",           caSharedSecretX)
             put("rawDg14",                   rawDg14)
         }.toString()

@@ -82,7 +82,6 @@ if (savedInstanceState == null && isEidkitDeepLink(intent?.data)) {
                 val authVmInstance: AuthViewModel = viewModel()
                 val signingVmInstance: SigningViewModel = viewModel()
                 val cityHallVmInstance: RemoteAuthViewModel = viewModel()
-
                 kycVm      = kycVmInstance
                 authVm     = authVmInstance
                 signingVm  = signingVmInstance
