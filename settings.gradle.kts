@@ -28,9 +28,16 @@ dependencyResolutionManagement {
 rootProject.name = "eidkit-android-demo"
 include(":app")
 
-// Local SDK substitution — comment out to revert to Maven Central 0.1.7
-includeBuild("../eidkit-android") {
-    dependencySubstitution {
-        substitute(module("ro.eidkit:sdk-android")).using(project(":sdk"))
+// Local SDK substitution — active only when local.properties contains useLocalSdk=true
+// Never set this for release builds.
+val localProps = java.util.Properties().also { props ->
+    val f = file("local.properties")
+    if (f.exists()) f.inputStream().use { props.load(it) }
+}
+if (localProps.getProperty("useLocalSdk") == "true") {
+    includeBuild("../eidkit-android") {
+        dependencySubstitution {
+            substitute(module("ro.eidkit:sdk-android")).using(project(":sdk"))
+        }
     }
 }

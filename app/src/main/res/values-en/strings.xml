@@ -139,9 +139,7 @@
     <string name="cityhall_title">EidKit</string>
     <string name="cityhall_subtitle">Identity card authentication</string>
     <string name="cityhall_pin_hint">Enter the CAN and PIN from your identity card, then hold the card against your phone.</string>
-    <string name="cityhall_posting">Sending identity…</string>
-    <string name="cityhall_success_prefix">Welcome, </string>
-    <string name="cityhall_success_suffix">!\n\nReturn to your browser — the page will update automatically.</string>
+    <string name="cityhall_success_message">Authentication successful!\n\nReturn to your browser — the page will update automatically.</string>
     <string name="cityhall_error_rescan">Session expired. Scan the QR code again.</string>
     <string name="cityhall_idle_hint">Scan the QR code on the website to start authentication.</string>
 

@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -113,8 +112,7 @@ fun RemoteAuthScreen(vm: RemoteAuthViewModel, onClose: (() -> Unit)? = null) {
                 is RemoteAuthState.Idle     -> IdleContent()
                 is RemoteAuthState.Input    -> InputContent(s, vm)
                 is RemoteAuthState.Scanning -> ScanningContent(s)
-                is RemoteAuthState.Posting  -> PostingContent()
-                is RemoteAuthState.Success  -> SuccessContent(s)
+                is RemoteAuthState.Success  -> SuccessContent()
                 is RemoteAuthState.Error    -> ErrorContent(s, onRetry = { vm.retry() })
             }
 
@@ -329,29 +327,10 @@ private fun ScanningContent(state: RemoteAuthState.Scanning) {
 }
 
 @Composable
-private fun PostingContent() {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Spacer(Modifier.height(32.dp))
-        CircularProgressIndicator(color = ElectricBlueLight)
-        Text(
-            text = stringResource(R.string.cityhall_posting),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-@Composable
-private fun SuccessContent(state: RemoteAuthState.Success) {
+private fun SuccessContent() {
     val activity = LocalContext.current.findActivity()
     ResultCard(
-        title = stringResource(R.string.cityhall_success_prefix) +
-                "${state.firstName} ${state.lastName}" +
-                stringResource(R.string.cityhall_success_suffix),
+        title = stringResource(R.string.cityhall_success_message),
         isError = false,
     )
     Spacer(Modifier.height(8.dp))
