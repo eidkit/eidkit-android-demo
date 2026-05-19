@@ -1,8 +1,9 @@
 package ro.eidkit.app.screens
 
+import android.app.Application
 import android.nfc.tech.IsoDep
 import androidx.fragment.app.FragmentActivity
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import io.opentelemetry.api.trace.StatusCode
 import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator
@@ -16,7 +17,9 @@ import kotlinx.coroutines.launch
 import ro.eidkit.app.BiometricStore
 import ro.eidkit.app.StoreOp
 import ro.eidkit.app.EidKitApp
+import ro.eidkit.app.relay.AttestationProvider
 import ro.eidkit.app.relay.OkHttpRelayTransport
+import ro.eidkit.app.relay.performAttestation
 import ro.eidkit.sdk.EidKit
 import ro.eidkit.sdk.error.CeiError
 import ro.eidkit.sdk.model.ReadEvent
@@ -49,7 +52,7 @@ sealed class RemoteAuthState {
     data class Error(val message: String) : RemoteAuthState()
 }
 
-class RemoteAuthViewModel : ViewModel() {
+class RemoteAuthViewModel(app: Application) : AndroidViewModel(app) {
 
     companion object {
         private val MapGetter = object : TextMapGetter<Map<String, String>> {
@@ -138,6 +141,16 @@ class RemoteAuthViewModel : ViewModel() {
         viewModelScope.launch(spanCtx.asContextElement()) {
             val transport = OkHttpRelayTransport()
             try {
+                // Attestation handshake before NFC — server sends challenge, we respond
+                // with a Play Integrity token proving this is a genuine EidKit app.
+                // Soft enforcement: server logs verdict, never rejects. ~1-2s before card tap.
+                transport.connectForAttestation(input.wsUrl)
+                performAttestation(
+                    provider     = AttestationProvider(getApplication()),
+                    transport    = transport,
+                    receiveFrame = { transport.receiveFrame() },
+                )
+
                 EidKit.relay(
                     isoDep    = isoDep,
                     can       = scannedCan,

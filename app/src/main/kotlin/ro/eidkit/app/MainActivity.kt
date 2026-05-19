@@ -196,6 +196,14 @@ if (isEidkitDeepLink(intent.data)) {
         val wsUrl        = uri.getQueryParameter("wss")         ?: return
         val serviceName  = uri.getQueryParameter("service")     ?: ""
         val traceparent  = uri.getQueryParameter("traceparent")
+        if (!isAllowedWsUrl(wsUrl)) return
         vm.initFromDeepLink(sessionToken, wsUrl, serviceName, traceparent)
+    }
+
+    private fun isAllowedWsUrl(url: String): Boolean {
+        val host = runCatching { java.net.URI(url).host }.getOrNull() ?: return false
+        if (host == "idp.eidkit.ro") return true
+        if (BuildConfig.DEBUG && (host == "localhost" || host.startsWith("192.168."))) return true
+        return false
     }
 }
