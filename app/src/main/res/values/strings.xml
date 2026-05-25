@@ -163,5 +163,7 @@
     <string name="error_card_lost">Cardul a fost mișcat — ține-l nemișcat și încearcă din nou</string>
     <string name="error_pace_failed">PACE eșuat — verifică CAN-ul și încearcă din nou</string>
     <string name="error_generic">Eroare: %s</string>
+    <string name="error_server_rejection">Autentificare respinsă de server</string>
+    <string name="error_contact_us">Dacă crezi că e o eroare, contactează-ne: support@eidkit.ro\nReferință: %s</string>
     <string name="error_nfc_unavailable">NFC nu este disponibil sau este dezactivat pe acest dispozitiv</string>
 </resources>

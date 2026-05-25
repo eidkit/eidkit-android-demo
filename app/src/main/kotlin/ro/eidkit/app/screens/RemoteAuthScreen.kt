@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -342,6 +343,11 @@ private fun SuccessContent() {
     }
 }
 
+private val SERVER_REJECTION_CODES = setOf(
+    "name_mismatch", "dg1_hash_mismatch", "dg14_hash_mismatch",
+    "active_auth_failed", "cnp_mismatch", "cnp_extraction_failed", "cnp_edata_extraction_failed",
+)
+
 @Composable
 private fun ErrorContent(state: RemoteAuthState.Error, onRetry: () -> Unit) {
     val message = when {
@@ -349,10 +355,21 @@ private fun ErrorContent(state: RemoteAuthState.Error, onRetry: () -> Unit) {
             val remaining = state.message.substringAfter("wrong_pin:").toIntOrNull() ?: 0
             stringResource(R.string.error_wrong_pin, remaining)
         }
-        state.message == "pin_blocked"  -> stringResource(R.string.error_pin_blocked)
-        state.message == "card_lost"    -> stringResource(R.string.error_card_lost)
-        state.message == "pace_failed"  -> stringResource(R.string.error_pace_failed)
+        state.message == "pin_blocked"         -> stringResource(R.string.error_pin_blocked)
+        state.message == "card_lost"           -> stringResource(R.string.error_card_lost)
+        state.message == "pace_failed"         -> stringResource(R.string.error_pace_failed)
+        state.message in SERVER_REJECTION_CODES -> stringResource(R.string.error_server_rejection)
         else -> stringResource(R.string.error_generic, state.message)
     }
-    ResultCard(title = message, isError = true, onRetry = onRetry)
+    val showContact = state.message in SERVER_REJECTION_CODES || state.message.startsWith("generic:")
+    ResultCard(title = message, isError = true, onRetry = onRetry) {
+        if (showContact && state.traceId != null) {
+            SelectionContainer {
+                Text(
+                    text = stringResource(R.string.error_contact_us, state.traceId),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        }
+    }
 }

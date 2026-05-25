@@ -162,5 +162,7 @@
     <string name="error_card_lost">Card moved — hold it steady and try again</string>
     <string name="error_pace_failed">PACE failed — check the CAN and try again</string>
     <string name="error_generic">Error: %s</string>
+    <string name="error_server_rejection">Authentication rejected by server</string>
+    <string name="error_contact_us">If you think this is a mistake, contact us: support@eidkit.ro\nReference: %s</string>
     <string name="error_nfc_unavailable">NFC is not available or is disabled on this device</string>
 </resources>

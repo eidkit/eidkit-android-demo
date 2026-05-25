@@ -5,6 +5,7 @@ import android.nfc.tech.IsoDep
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import io.opentelemetry.api.trace.Span
 import io.opentelemetry.api.trace.StatusCode
 import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator
 import io.opentelemetry.context.Context
@@ -49,7 +50,7 @@ sealed class RemoteAuthState {
         val saveDialog: SaveDialogState? = null,
     ) : RemoteAuthState()
 
-    data class Error(val message: String) : RemoteAuthState()
+    data class Error(val message: String, val traceId: String? = null) : RemoteAuthState()
 }
 
 class RemoteAuthViewModel(app: Application) : AndroidViewModel(app) {
@@ -133,10 +134,12 @@ class RemoteAuthViewModel(app: Application) : AndroidViewModel(app) {
         val parentCtx = input.traceparent
             ?.let { W3CTraceContextPropagator.getInstance().extract(Context.root(), mapOf("traceparent" to it), MapGetter) }
             ?: Context.current()
-        val remoteAuthSpan = EidKitApp.tracer.spanBuilder("remote_auth")
+        val remoteAuthSpan: Span = EidKitApp.tracer.spanBuilder("remote_auth")
             .setParent(parentCtx)
             .startSpan()
         val spanCtx = parentCtx.with(remoteAuthSpan)
+        val rawTraceId: String = remoteAuthSpan.spanContext.traceId
+        val spanTraceId: String? = if (rawTraceId == "00000000000000000000000000000000") null else rawTraceId
 
         viewModelScope.launch(spanCtx.asContextElement()) {
             val transport = OkHttpRelayTransport()
@@ -172,22 +175,22 @@ class RemoteAuthViewModel(app: Application) : AndroidViewModel(app) {
                 remoteAuthSpan.setStatus(StatusCode.OK)
 
             } catch (e: CeiError.WrongPin) {
-                _state.value = RemoteAuthState.Error("wrong_pin:${e.attemptsRemaining}")
+                _state.value = RemoteAuthState.Error("wrong_pin:${e.attemptsRemaining}", spanTraceId)
                 remoteAuthSpan.recordException(e); remoteAuthSpan.setStatus(StatusCode.ERROR)
             } catch (e: CeiError.PinBlocked) {
-                _state.value = RemoteAuthState.Error("pin_blocked")
+                _state.value = RemoteAuthState.Error("pin_blocked", spanTraceId)
                 remoteAuthSpan.recordException(e); remoteAuthSpan.setStatus(StatusCode.ERROR)
             } catch (e: CeiError.CardLost) {
-                _state.value = RemoteAuthState.Error("card_lost")
+                _state.value = RemoteAuthState.Error("card_lost", spanTraceId)
                 remoteAuthSpan.recordException(e); remoteAuthSpan.setStatus(StatusCode.ERROR)
             } catch (e: CeiError.PaceFailure) {
-                _state.value = RemoteAuthState.Error("pace_failed")
+                _state.value = RemoteAuthState.Error("pace_failed", spanTraceId)
                 remoteAuthSpan.recordException(e); remoteAuthSpan.setStatus(StatusCode.ERROR)
             } catch (e: CeiError) {
-                _state.value = RemoteAuthState.Error("generic:${e.message}")
+                _state.value = RemoteAuthState.Error("generic:${e.message}", spanTraceId)
                 remoteAuthSpan.recordException(e); remoteAuthSpan.setStatus(StatusCode.ERROR)
             } catch (e: Exception) {
-                _state.value = RemoteAuthState.Error("network:${e.message}")
+                _state.value = RemoteAuthState.Error("network:${e.message}", spanTraceId)
                 remoteAuthSpan.recordException(e); remoteAuthSpan.setStatus(StatusCode.ERROR)
             } finally {
                 remoteAuthSpan.end()
