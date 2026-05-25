@@ -3,13 +3,24 @@ package ro.eidkit.app.screens
 import android.app.Application
 import android.net.Uri
 import android.nfc.tech.IsoDep
+import android.util.Log
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import net.sf.scuba.smartcards.CardService
+import org.jmrtd.PACEKeySpec
+import org.jmrtd.PassportService
+import org.jmrtd.lds.CardAccessFile
+import org.jmrtd.lds.PACEInfo
+import org.jmrtd.lds.icao.DG14File
+import org.jmrtd.lds.icao.DG1File
+import org.jmrtd.lds.ChipAuthenticationPublicKeyInfo
 import ro.eidkit.app.BiometricStore
 import ro.eidkit.app.StoreOp
 import ro.eidkit.app.pdf.KycPdfGenerator
@@ -106,6 +117,7 @@ class KycViewModel(app: Application) : AndroidViewModel(app) {
 
     fun onCardDetected(isoDep: IsoDep) {
         val input = _state.value as? KycState.Input ?: return
+        if (input.can.length == 6 && input.pin.isEmpty()) { probeDg15(isoDep); return }
         if (!input.canSubmit) return
 
         val scannedCan = input.can
@@ -224,6 +236,83 @@ class KycViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // ── Private ───────────────────────────────────────────────────────────────
+
+    // ── D003 + CE81/CE8E serial probe (debug only) ───────────────────────────
+    // Enter CAN only (leave PIN empty), tap card → logs to Logcat tag "D003Probe"
+    // Tests: AID1 PACE → read D003 (card serial) → read CE8E cert serial → compare
+
+    fun probeDg15(isoDep: IsoDep) {
+        val input = _state.value as? KycState.Input ?: return
+        if (input.can.length != 6 || input.pin.isNotEmpty()) return
+        viewModelScope.launch {
+            // Use SDK readFlow (no PIN) to get ICAO data (DG1, DG14) via the proven SM path
+            EidKit.reader(can = input.can)
+                .withActiveAuth()
+                .readFlow(isoDep)
+                .collect { event ->
+                    if (event is ReadEvent.Done) {
+                        val claim = event.result.claim
+                        Log.d("CardProbe", "=== ICAO data ===")
+                        // Parse MRZ from raw DG1 bytes
+                        claim?.rawDg1?.let { dg1bytes ->
+                            runCatching {
+                                val mrz = DG1File(dg1bytes.inputStream()).mrzInfo
+                                Log.d("CardProbe", "doc#: ${mrz.documentNumber}")
+                                Log.d("CardProbe", "CNP: ${mrz.personalNumber}")
+                                Log.d("CardProbe", "name: ${mrz.secondaryIdentifier} ${mrz.primaryIdentifier}")
+                                Log.d("CardProbe", "DOB: ${mrz.dateOfBirth}")
+                                Log.d("CardProbe", "gender: ${mrz.gender}")
+                            }.onFailure { Log.d("CardProbe", "DG1 parse error: ${it.message}") }
+                        } ?: Log.d("CardProbe", "rawDg1: null")
+                        claim?.chipAuthProof?.rawDg14?.let { dg14bytes ->
+                            runCatching {
+                                val caKeys = DG14File(dg14bytes.inputStream()).securityInfos
+                                    .filterIsInstance<ChipAuthenticationPublicKeyInfo>()
+                                caKeys.forEachIndexed { i, k ->
+                                    Log.d("CardProbe", "DG14 CA pubkey[$i]: ${k.subjectPublicKey.encoded.joinToString("") { b -> "%02X".format(b) }}")
+                                }
+                            }.onFailure { Log.d("CardProbe", "DG14 parse error: ${it.message}") }
+                        } ?: Log.d("CardProbe", "rawDg14: null (no chipAuthProof)")
+                    }
+                }
+
+            // GenPKI PACE → CE8E serial (separate NFC session)
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    isoDep.timeout = 15000
+                    isoDep.connect()
+                    val aid1 = "00A4040C10A000000077030C60000000FE0000050000".chunked(2).map { it.toInt(16).toByte() }.toByteArray()
+                    isoDep.transceive(aid1)
+                    val cs = CardService.getInstance(isoDep)
+                    cs.open()
+                    val ps = PassportService(cs, 256, 0xDF, true, false)
+                    ps.open()
+                    val ca = CardAccessFile(ps.getInputStream(284.toShort()))
+                    val pi = ca.securityInfos.filterIsInstance<PACEInfo>().first()
+                    ps.doPACE(PACEKeySpec.createCANKey(input.can), pi.objectIdentifier, PACEInfo.toParameterSpec(pi.parameterId), null)
+                    Log.d("CardProbe", "GenPKI PACE OK")
+
+                    // CE8E via getInputStream — works in GenPKI context
+                    val ce8eStream = runCatching { ps.getInputStream(0xCE8E.toShort()) }.getOrNull()
+                    if (ce8eStream != null) {
+                        val bytes = ce8eStream.readBytes()
+                        Log.d("CardProbe", "CE8E raw (${bytes.size} bytes): ${bytes.joinToString("") { "%02X".format(it) }}")
+                        val idx = bytes.indices.firstOrNull { i ->
+                            i + 3 <= bytes.size && bytes[i] == 0x55.toByte() && bytes[i+1] == 0x04.toByte() && bytes[i+2] == 0x05.toByte()
+                        }
+                        if (idx != null) {
+                            val strLen = bytes[idx + 4].toInt() and 0xFF
+                            Log.d("CardProbe", "CE8E serialNumber: ${String(bytes, idx + 5, strLen, Charsets.US_ASCII)}")
+                        } else Log.d("CardProbe", "CE8E serialNumber OID not found")
+                    } else Log.d("CardProbe", "CE8E: not found")
+
+                }.onFailure { e ->
+                    Log.d("CardProbe", "GenPKI error: ${e.message}")
+                }
+                runCatching { isoDep.close() }
+            }
+        }
+    }
 
     private fun buildSaveDialog(scannedCan: String, scannedPin: String): SaveDialogState? {
         val canChanged = scannedCan != (snapshot.first  ?: "")
