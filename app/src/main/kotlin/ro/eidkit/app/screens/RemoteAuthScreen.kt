@@ -77,7 +77,7 @@ fun RemoteAuthScreen(vm: RemoteAuthViewModel, onClose: (() -> Unit)? = null) {
     val successState = state as? RemoteAuthState.Success
 
     val context = LocalContext.current
-    if (successState?.saveDialog != null && activity != null && !BiometricStore.neverAsk(context)) {
+    if (successState?.saveDialog != null && activity != null && !BiometricStore.neverAsk(context) && BiometricStore.canSave(context)) {
         SaveCredentialsDialog(
             activity     = activity,
             state        = successState.saveDialog,

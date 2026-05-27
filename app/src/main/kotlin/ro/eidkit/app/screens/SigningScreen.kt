@@ -73,7 +73,7 @@ fun SigningScreen(
     val activity = context.findActivity()
     val successState = state as? SigningState.Success
 
-    if (successState?.saveDialog != null && activity != null && !BiometricStore.neverAsk(context)) {
+    if (successState?.saveDialog != null && activity != null && !BiometricStore.neverAsk(context) && BiometricStore.canSave(context)) {
         SaveCredentialsDialog(
             activity     = activity,
             state        = successState.saveDialog,

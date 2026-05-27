@@ -72,7 +72,7 @@ fun KycScreen(
     val activity = LocalContext.current.findActivity()
 
     val context = LocalContext.current
-    if (successState?.saveDialog != null && activity != null && !BiometricStore.neverAsk(context)) {
+    if (successState?.saveDialog != null && activity != null && !BiometricStore.neverAsk(context) && BiometricStore.canSave(context)) {
         SaveCredentialsDialog(
             activity     = activity,
             state        = successState.saveDialog,
