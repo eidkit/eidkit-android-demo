@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import ro.eidkit.app.BiometricStore
+import ro.eidkit.app.EmailStore
 import ro.eidkit.app.StoreOp
 import ro.eidkit.app.EidKitApp
 import ro.eidkit.app.relay.AttestationProvider
@@ -44,6 +45,10 @@ sealed class RemoteAuthState {
         val activeStep: ReadEvent?,
     ) : RemoteAuthState()
 
+    data class EmailInput(val prefill: String?, val clientId: String = "", val serviceName: String = "", val pendingEmail: String? = null) : RemoteAuthState()
+
+    data class OtpInput(val email: String, val clientId: String = "", val serviceName: String = "") : RemoteAuthState()
+
     data class Success(
         val firstName: String = "",
         val lastName: String = "",
@@ -71,6 +76,8 @@ class RemoteAuthViewModel(app: Application) : AndroidViewModel(app) {
     private var lastInput: RemoteAuthState.Input? = null
     private var snapshot = Triple<String?, String?, String?>(null, null, null)
     private var pendingSaveDialog: SaveDialogState? = null
+
+    private var activeTransport: OkHttpRelayTransport? = null
 
     // ── Biometric load ────────────────────────────────────────────────────────
 
@@ -143,6 +150,7 @@ class RemoteAuthViewModel(app: Application) : AndroidViewModel(app) {
 
         viewModelScope.launch(spanCtx.asContextElement()) {
             val transport = OkHttpRelayTransport()
+            activeTransport = transport
             try {
                 // Attestation handshake before NFC — server sends challenge, we respond
                 // with a Play Integrity token proving this is a genuine EidKit app.
@@ -167,6 +175,9 @@ class RemoteAuthViewModel(app: Application) : AndroidViewModel(app) {
                         else
                             current.completedSteps
                         _state.value = RemoteAuthState.Scanning(completed, event)
+                    },
+                    onUnknownFrame = { type, frame ->
+                        handleRelayFrame(type, frame, transport)
                     },
                 )
 
@@ -193,6 +204,7 @@ class RemoteAuthViewModel(app: Application) : AndroidViewModel(app) {
                 _state.value = RemoteAuthState.Error("network:${e.message}", spanTraceId)
                 remoteAuthSpan.recordException(e); remoteAuthSpan.setStatus(StatusCode.ERROR)
             } finally {
+                activeTransport = null
                 remoteAuthSpan.end()
             }
         }
@@ -235,6 +247,66 @@ class RemoteAuthViewModel(app: Application) : AndroidViewModel(app) {
                     snapshot.third,
                 )
             },
+        )
+    }
+
+    // ── Email / OTP ───────────────────────────────────────────────────────────
+
+    private fun handleRelayFrame(type: String, frame: org.json.JSONObject, transport: OkHttpRelayTransport) {
+        when (type) {
+            "email_request" -> {
+                val prefill = frame.optString("prefill").takeIf { it.isNotEmpty() }
+                val clientId = frame.optString("client_id").takeIf { it.isNotEmpty() } ?: ""
+                val serviceName = _serviceName.value
+                // If a remembered email exists for this client, silently resubmit it
+                val remembered = if (clientId.isNotEmpty()) EmailStore.getRemembered(getApplication(), clientId) else null
+                if (remembered != null) {
+                    transport.sendFrame(
+                        org.json.JSONObject().apply {
+                            put("type", "email_submit"); put("email", remembered)
+                        }.toString()
+                    )
+                } else {
+                    _state.value = RemoteAuthState.EmailInput(prefill, clientId, serviceName)
+                }
+            }
+            "email_otp_sent" -> {
+                val s = _state.value
+                val email = (s as? RemoteAuthState.EmailInput)?.pendingEmail
+                    ?: (s as? RemoteAuthState.OtpInput)?.email
+                    ?: ""
+                val clientId = (s as? RemoteAuthState.EmailInput)?.clientId
+                    ?: (s as? RemoteAuthState.OtpInput)?.clientId ?: ""
+                val serviceName = (s as? RemoteAuthState.EmailInput)?.serviceName
+                    ?: (s as? RemoteAuthState.OtpInput)?.serviceName ?: ""
+                _state.value = RemoteAuthState.OtpInput(email, clientId, serviceName)
+            }
+        }
+    }
+
+    fun submitEmail(email: String, remember: Boolean) {
+        val s = _state.value as? RemoteAuthState.EmailInput ?: return
+        if (remember && s.clientId.isNotEmpty()) {
+            EmailStore.remember(getApplication(), s.clientId, s.serviceName, email)
+        }
+        // Stamp the typed email so email_otp_sent can pick it up if OTP is needed
+        _state.value = s.copy(pendingEmail = email)
+        activeTransport?.sendFrame(
+            org.json.JSONObject().apply {
+                put("type", "email_submit"); put("email", email)
+            }.toString()
+        )
+    }
+
+    fun submitOtp(code: String, remember: Boolean) {
+        val s = _state.value as? RemoteAuthState.OtpInput
+        if (remember && s != null && s.clientId.isNotEmpty()) {
+            EmailStore.remember(getApplication(), s.clientId, s.serviceName, s.email)
+        }
+        activeTransport?.sendFrame(
+            org.json.JSONObject().apply {
+                put("type", "email_otp"); put("code", code); put("remember", remember)
+            }.toString()
         )
     }
 

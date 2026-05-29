@@ -166,4 +166,25 @@
     <string name="error_server_rejection">Autentificare respinsă de server</string>
     <string name="error_contact_us">Dacă crezi că e o eroare, contactează-ne: support@eidkit.ro\nReferință: %s</string>
     <string name="error_nfc_unavailable">NFC nu este disponibil sau este dezactivat pe acest dispozitiv</string>
+
+    <!-- Email verification -->
+    <string name="label_email">Adresă de email</string>
+    <string name="label_otp">Cod de verificare (6 cifre)</string>
+    <string name="email_input_hint">Introduceți adresa de email pe care doriți să o asociați cu acest serviciu.</string>
+    <string name="otp_hint">Am trimis un cod de 6 cifre la %s. Introduceți-l mai jos.</string>
+    <string name="email_remember">Reține pentru sesiunile viitoare</string>
+    <string name="action_continue">Continuă</string>
+    <string name="action_verify">Verifică</string>
+
+    <!-- Saved data screen -->
+    <string name="saved_data_title">Date salvate</string>
+    <string name="saved_data_subtitle">Gestionează codurile și emailurile reținute pe acest dispozitiv.</string>
+    <string name="saved_data_section_credentials">Credențiale</string>
+    <string name="saved_data_section_emails">Emailuri reținute</string>
+    <string name="saved_data_credentials_label">CAN, PIN autentificare, PIN semnare</string>
+    <string name="saved_data_field_saved">Salvat</string>
+    <string name="saved_data_field_not_saved">Nesalvat</string>
+    <string name="saved_data_action_clear">Șterge</string>
+    <string name="saved_data_action_forget">Uită</string>
+    <string name="saved_data_no_emails">Nu există emailuri reținute.</string>
 </resources>

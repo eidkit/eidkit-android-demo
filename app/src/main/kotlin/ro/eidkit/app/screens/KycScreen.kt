@@ -149,7 +149,6 @@ private fun KycInputContent(state: KycState.Input, vm: KycViewModel) {
 
     val activity = context.findActivity()
     LaunchedEffect(Unit) { activity?.let { vm.tryBiometricLoad(it) } }
-    var hasCredentials by remember { mutableStateOf(BiometricStore.hasCredentials(context)) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     if (showCanInfo) {
@@ -226,25 +225,6 @@ private fun KycInputContent(state: KycState.Input, vm: KycViewModel) {
         onClear           = { vm.onPinChange("") },
     )
 
-    if (hasCredentials) {
-        androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxWidth()) {
-            androidx.compose.material3.TextButton(
-                onClick = {
-                    BiometricStore.clear(context)
-                    hasCredentials = false
-                    vm.onCanChange("")
-                    vm.onPinChange("")
-                },
-                modifier = Modifier.align(Alignment.CenterEnd),
-            ) {
-                Text(
-                    text  = stringResource(R.string.bio_forget),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-        }
-    }
 
     Row(verticalAlignment = Alignment.CenterVertically) {
         Checkbox(checked = state.includePhoto, onCheckedChange = vm::onPhotoToggle)

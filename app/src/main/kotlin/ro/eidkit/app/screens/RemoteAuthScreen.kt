@@ -28,6 +28,10 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -35,6 +39,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.Alignment
 import ro.eidkit.app.BiometricStore
 import ro.eidkit.app.ui.components.SaveCredentialsDialog
@@ -110,11 +115,13 @@ fun RemoteAuthScreen(vm: RemoteAuthViewModel, onClose: (() -> Unit)? = null) {
             Spacer(Modifier.height(8.dp))
 
             when (val s = state) {
-                is RemoteAuthState.Idle     -> IdleContent()
-                is RemoteAuthState.Input    -> InputContent(s, vm)
-                is RemoteAuthState.Scanning -> ScanningContent(s)
-                is RemoteAuthState.Success  -> SuccessContent()
-                is RemoteAuthState.Error    -> ErrorContent(s, onRetry = { vm.retry() })
+                is RemoteAuthState.Idle       -> IdleContent()
+                is RemoteAuthState.Input      -> InputContent(s, vm)
+                is RemoteAuthState.Scanning   -> ScanningContent(s)
+                is RemoteAuthState.EmailInput -> EmailInputContent(s, vm)
+                is RemoteAuthState.OtpInput   -> OtpInputContent(s, vm)
+                is RemoteAuthState.Success    -> SuccessContent()
+                is RemoteAuthState.Error      -> ErrorContent(s, onRetry = { vm.retry() })
             }
 
             Spacer(Modifier.height(24.dp))
@@ -194,7 +201,6 @@ private fun InputContent(state: RemoteAuthState.Input, vm: RemoteAuthViewModel) 
     var showCanInfo by remember { mutableStateOf(false) }
     val activity = context.findActivity()
     LaunchedEffect(Unit) { activity?.let { vm.tryBiometricLoad(it) } }
-    var hasCredentials by remember { mutableStateOf(BiometricStore.hasCredentials(context)) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     if (showCanInfo) {
@@ -276,25 +282,6 @@ private fun InputContent(state: RemoteAuthState.Input, vm: RemoteAuthViewModel) 
         onClear           = { vm.onPinChange("") },
     )
 
-    if (hasCredentials) {
-        androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxWidth()) {
-            androidx.compose.material3.TextButton(
-                onClick = {
-                    BiometricStore.clear(context)
-                    hasCredentials = false
-                    vm.onCanChange("")
-                    vm.onPinChange("")
-                },
-                modifier = Modifier.align(Alignment.CenterEnd),
-            ) {
-                Text(
-                    text  = stringResource(R.string.bio_forget),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-        }
-    }
 
     if (state.canSubmit) {
         NfcPrompt(modifier = Modifier.fillMaxWidth(), scanning = true)
@@ -323,6 +310,107 @@ private fun ScanningContent(state: RemoteAuthState.Scanning) {
                 else -> StepState.Pending
             }
             WizardStep(label = labelForReadEvent(step), state = stepState)
+        }
+    }
+}
+
+@Composable
+private fun EmailInputContent(state: RemoteAuthState.EmailInput, vm: RemoteAuthViewModel) {
+    var email by remember { mutableStateOf(state.prefill ?: "") }
+    var saveForNextTime by remember { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(
+            text = stringResource(R.string.email_input_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        OutlinedTextField(
+            value = email,
+            onValueChange = { email = it },
+            label = { Text(stringResource(R.string.label_email)) },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Email,
+                imeAction = ImeAction.Done,
+            ),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                text = stringResource(R.string.email_remember),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Switch(
+                checked = saveForNextTime,
+                onCheckedChange = { saveForNextTime = it },
+                colors = SwitchDefaults.colors(
+                    uncheckedThumbColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    uncheckedTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
+                    uncheckedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                ),
+            )
+        }
+        androidx.compose.material3.Button(
+            onClick = { if (email.isNotBlank()) vm.submitEmail(email, saveForNextTime) },
+            enabled = email.isNotBlank(),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(R.string.action_continue))
+        }
+    }
+}
+
+@Composable
+private fun OtpInputContent(state: RemoteAuthState.OtpInput, vm: RemoteAuthViewModel) {
+    var code by remember { mutableStateOf("") }
+    var saveForNextTime by remember { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(
+            text = stringResource(R.string.otp_hint, state.email),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        PinField(
+            value = code,
+            onValueChange = { code = it },
+            label = stringResource(R.string.label_otp),
+            maxLength = 6,
+            imeAction = ImeAction.Done,
+            dismissOnComplete = true,
+            maskable = false,
+            onClear = { code = "" },
+        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                text = stringResource(R.string.email_remember),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Switch(
+                checked = saveForNextTime,
+                onCheckedChange = { saveForNextTime = it },
+                colors = SwitchDefaults.colors(
+                    uncheckedThumbColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    uncheckedTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
+                    uncheckedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                ),
+            )
+        }
+        androidx.compose.material3.Button(
+            onClick = { if (code.length == 6) vm.submitOtp(code, saveForNextTime) },
+            enabled = code.length == 6,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(R.string.action_verify))
         }
     }
 }

@@ -208,7 +208,6 @@ private fun SigningInputContent(state: SigningState.Input, vm: SigningViewModel,
     val context = LocalContext.current
     val activity = context.findActivity()
     LaunchedEffect(Unit) { activity?.let { vm.tryBiometricLoad(it) } }
-    var hasCredentials by remember { mutableStateOf(BiometricStore.hasCredentials(context)) }
     // Selected document card
     OutlinedCard(
         colors = CardDefaults.outlinedCardColors(containerColor = SurfaceCard),
@@ -267,25 +266,6 @@ private fun SigningInputContent(state: SigningState.Input, vm: SigningViewModel,
         onClear           = { vm.onPinChange("") },
     )
 
-    if (hasCredentials) {
-        Box(modifier = Modifier.fillMaxWidth()) {
-            TextButton(
-                onClick = {
-                    BiometricStore.clear(context)
-                    hasCredentials = false
-                    vm.onCanChange("")
-                    vm.onPinChange("")
-                },
-                modifier = Modifier.align(Alignment.CenterEnd),
-            ) {
-                Text(
-                    text  = stringResource(R.string.bio_forget),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-        }
-    }
 
     if (state.canSubmit) {
         NfcPrompt(modifier = Modifier.fillMaxWidth())

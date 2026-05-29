@@ -45,8 +45,6 @@ fun HomeScreen(
     onSigning: () -> Unit,
 ) {
     val context = LocalContext.current
-    var hasCredentials by remember { mutableStateOf(BiometricStore.hasCredentials(context)) }
-
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 32.dp),
@@ -65,20 +63,6 @@ fun HomeScreen(
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                if (hasCredentials) {
-                    Spacer(Modifier.height(8.dp))
-                    TextButton(
-                        onClick = {
-                            BiometricStore.clear(context)
-                            hasCredentials = false
-                        },
-                    ) {
-                        Text(
-                            text  = stringResource(R.string.bio_forget),
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
-                }
             }
         }
 

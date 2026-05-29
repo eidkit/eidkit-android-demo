@@ -22,8 +22,8 @@ android {
         applicationId = "ro.eidkit.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 22
-        versionName = "1.11.0"
+        versionCode = 23
+        versionName = "1.12.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -78,7 +78,7 @@ android {
 }
 
 dependencies {
-    implementation("ro.eidkit:sdk-android:0.1.14")
+    implementation("ro.eidkit:sdk-android:0.1.15")
     implementation("com.google.android.play:integrity:1.4.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")

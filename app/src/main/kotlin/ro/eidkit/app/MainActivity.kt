@@ -24,12 +24,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
-import ro.eidkit.app.screens.AuthScreen
-import ro.eidkit.app.screens.AuthViewModel
 import ro.eidkit.app.screens.RemoteAuthScreen
 import ro.eidkit.app.screens.RemoteAuthViewModel
 import ro.eidkit.app.screens.KycScreen
 import ro.eidkit.app.screens.KycViewModel
+import ro.eidkit.app.screens.SavedDataScreen
 import ro.eidkit.app.screens.SigningScreen
 import ro.eidkit.app.screens.SigningViewModel
 import ro.eidkit.app.ui.components.DemoRibbon
@@ -37,8 +36,8 @@ import ro.eidkit.app.ui.theme.EidKitTheme
 import ro.eidkit.sdk.EidKit
 
 private const val TAB_KYC     = 0
-private const val TAB_AUTH    = 1
-private const val TAB_SIGNING = 2
+private const val TAB_SIGNING = 1
+private const val TAB_SAVED   = 2
 
 /**
  * Single-activity host with a bottom navigation bar.
@@ -51,7 +50,6 @@ class MainActivity : AppCompatActivity() {
     private val nfcAdapter: NfcAdapter? by lazy { NfcAdapter.getDefaultAdapter(this) }
 
     private var kycVm: KycViewModel? = null
-    private var authVm: AuthViewModel? = null
     private var signingVm: SigningViewModel? = null
     private var cityHallVm: RemoteAuthViewModel? = null
     private var pendingDeepLinkIntent: Intent? = null
@@ -79,11 +77,9 @@ if (savedInstanceState == null && isEidkitDeepLink(intent?.data)) {
                 val cityHallActive by _cityHallActive
 
                 val kycVmInstance: KycViewModel = viewModel()
-                val authVmInstance: AuthViewModel = viewModel()
                 val signingVmInstance: SigningViewModel = viewModel()
                 val cityHallVmInstance: RemoteAuthViewModel = viewModel()
                 kycVm      = kycVmInstance
-                authVm     = authVmInstance
                 signingVm  = signingVmInstance
                 cityHallVm = cityHallVmInstance
                 this.selectedTab = selectedTab
@@ -117,16 +113,16 @@ if (savedInstanceState == null && isEidkitDeepLink(intent?.data)) {
                                     label    = { Text(stringResource(R.string.kyc_title)) },
                                 )
                                 NavigationBarItem(
-                                    selected = selectedTab == TAB_AUTH,
-                                    onClick  = { selectedTab = TAB_AUTH },
-                                    icon     = { Icon(painterResource(R.drawable.ic_shield), contentDescription = null) },
-                                    label    = { Text(stringResource(R.string.auth_title)) },
-                                )
-                                NavigationBarItem(
                                     selected = selectedTab == TAB_SIGNING,
                                     onClick  = { selectedTab = TAB_SIGNING },
                                     icon     = { Icon(painterResource(R.drawable.ic_draw), contentDescription = null) },
                                     label    = { Text(stringResource(R.string.signing_title)) },
+                                )
+                                NavigationBarItem(
+                                    selected = selectedTab == TAB_SAVED,
+                                    onClick  = { selectedTab = TAB_SAVED },
+                                    icon     = { Icon(painterResource(R.drawable.ic_storage), contentDescription = null) },
+                                    label    = { Text(stringResource(R.string.saved_data_title)) },
                                 )
                             }
                         }
@@ -134,8 +130,8 @@ if (savedInstanceState == null && isEidkitDeepLink(intent?.data)) {
                         Box(modifier = Modifier.padding(innerPadding)) {
                             when (selectedTab) {
                                 TAB_KYC     -> KycScreen(vm = kycVmInstance)
-                                TAB_AUTH    -> AuthScreen(vm = authVmInstance)
                                 TAB_SIGNING -> SigningScreen(vm = signingVmInstance)
+                                TAB_SAVED   -> SavedDataScreen()
                             }
                             if (EidKit.isDemoMode()) DemoRibbon()
                         }
@@ -159,7 +155,6 @@ if (savedInstanceState == null && isEidkitDeepLink(intent?.data)) {
                     } else {
                         when (selectedTab) {
                             TAB_KYC     -> kycVm?.onCardDetected(isoDep)
-                            TAB_AUTH    -> authVm?.onCardDetected(isoDep)
                             TAB_SIGNING -> signingVm?.onCardDetected(isoDep)
                         }
                     }

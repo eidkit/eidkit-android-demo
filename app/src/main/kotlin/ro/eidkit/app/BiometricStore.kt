@@ -1,6 +1,7 @@
 package ro.eidkit.app
 
 import android.content.Context
+import android.util.Log
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
@@ -16,12 +17,14 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
+private const val TAG               = "BiometricStore"
 private const val KEYSTORE_PROVIDER = "AndroidKeyStore"
 private const val KEY_ALIAS         = "eidkit_bio_key"
 private const val PREFS_NAME        = "bio_credentials"
 private const val KEY_BLOB          = "bio_blob"       // single encrypted JSON
 private const val PREFS_PLAIN       = "bio_prefs"
 private const val KEY_NEVER_ASK     = "never_ask"
+private const val KEY_FIELDS        = "saved_fields"   // comma-separated set: "can,pin,pin2"
 private const val GCM_TAG_LENGTH    = 128
 
 /**
@@ -139,7 +142,15 @@ object BiometricStore {
                         .also { it.init(Cipher.ENCRYPT_MODE, keystoreKey()!!) }
                     val encrypted = encryptWithCipher(freshCipher, json.toString())
                     prefs.edit().putString(KEY_BLOB, encrypted).apply()
-                    logd("save: written successfully")
+                    // Update shadow field index so savedFields() works without auth
+                    val fields = listOfNotNull(
+                        "can".takeIf  { json.optString("can",  "").isNotEmpty() },
+                        "pin".takeIf  { json.optString("pin",  "").isNotEmpty() },
+                        "pin2".takeIf { json.optString("pin2", "").isNotEmpty() },
+                    )
+                    activity.getSharedPreferences(PREFS_PLAIN, Context.MODE_PRIVATE)
+                        .edit().putString(KEY_FIELDS, fields.joinToString(",")).apply()
+                    logd("save: written successfully fields=$fields")
                 } catch (e: Exception) {
                     loge("save: write failed: ${e.message}", e)
                     // Key was invalidated by new biometric enrollment — delete it so next save recreates it
@@ -167,18 +178,40 @@ object BiometricStore {
             .edit().putBoolean(KEY_NEVER_ASK, true).apply()
     }
 
+    /** Returns which fields are currently saved (without requiring biometric auth). */
+    fun savedFields(context: Context): Set<String> {
+        if (!hasCredentials(context)) return emptySet()
+        val raw = context.getSharedPreferences(PREFS_PLAIN, Context.MODE_PRIVATE)
+            .getString(KEY_FIELDS, null)
+        // Shadow index not yet written (credentials saved before this version) — assume all present
+        if (raw.isNullOrBlank()) return setOf("can", "pin", "pin2")
+        return raw.split(",").filter { it.isNotBlank() }.toSet()
+    }
+
     /** Deletes all stored values and resets the never-ask flag. */
     fun clear(context: Context) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().clear().apply()
         context.getSharedPreferences(PREFS_PLAIN, Context.MODE_PRIVATE)
-            .edit().remove(KEY_NEVER_ASK).apply()
+            .edit().remove(KEY_NEVER_ASK).remove(KEY_FIELDS).apply()
+    }
+
+    /** Clears a single field from the stored blob. Requires biometric auth. */
+    fun clearField(activity: FragmentActivity, field: String, onDone: () -> Unit) {
+        val fieldOp = StoreOp.Write(null)
+        save(
+            activity = activity,
+            can      = if (field == "can")  fieldOp else StoreOp.Skip,
+            pin      = if (field == "pin")  fieldOp else StoreOp.Skip,
+            pin2     = if (field == "pin2") fieldOp else StoreOp.Skip,
+            onDone   = onDone,
+        )
     }
 
     // ── Private ───────────────────────────────────────────────────────────────
 
-    private fun logd(msg: String) { if (BuildConfig.DEBUG) logd(msg) }
-    private fun loge(msg: String, t: Throwable? = null) { if (BuildConfig.DEBUG) loge(msg, t) }
-    private fun logw(msg: String) { if (BuildConfig.DEBUG) logw(msg) }
+    private fun logd(msg: String) { if (BuildConfig.DEBUG) Log.d(TAG, msg) }
+    private fun loge(msg: String, t: Throwable? = null) { if (BuildConfig.DEBUG) Log.e(TAG, msg, t) }
+    private fun logw(msg: String) { if (BuildConfig.DEBUG) Log.w(TAG, msg) }
 
     private fun deleteKey() {
         runCatching {

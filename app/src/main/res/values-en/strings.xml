@@ -165,4 +165,25 @@
     <string name="error_server_rejection">Authentication rejected by server</string>
     <string name="error_contact_us">If you think this is a mistake, contact us: support@eidkit.ro\nReference: %s</string>
     <string name="error_nfc_unavailable">NFC is not available or is disabled on this device</string>
+
+    <!-- Email verification -->
+    <string name="label_email">Email address</string>
+    <string name="label_otp">Verification code (6 digits)</string>
+    <string name="email_input_hint">Enter the email address you want to associate with this service.</string>
+    <string name="otp_hint">We sent a 6-digit code to %s. Enter it below.</string>
+    <string name="email_remember">Remember for future logins</string>
+    <string name="action_continue">Continue</string>
+    <string name="action_verify">Verify</string>
+
+    <!-- Saved data screen -->
+    <string name="saved_data_title">Saved Data</string>
+    <string name="saved_data_subtitle">Manage credentials and remembered emails stored on this device.</string>
+    <string name="saved_data_section_credentials">Credentials</string>
+    <string name="saved_data_section_emails">Remembered Emails</string>
+    <string name="saved_data_credentials_label">CAN, authentication PIN, signing PIN</string>
+    <string name="saved_data_field_saved">Saved</string>
+    <string name="saved_data_field_not_saved">Not saved</string>
+    <string name="saved_data_action_clear">Clear</string>
+    <string name="saved_data_action_forget">Forget</string>
+    <string name="saved_data_no_emails">No remembered emails.</string>
 </resources>
