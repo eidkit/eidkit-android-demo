@@ -261,6 +261,7 @@ class RemoteAuthViewModel(app: Application) : AndroidViewModel(app) {
                 // If a remembered email exists for this client, silently resubmit it
                 val remembered = if (clientId.isNotEmpty()) EmailStore.getRemembered(getApplication(), clientId) else null
                 if (remembered != null) {
+                    _state.value = RemoteAuthState.EmailInput(prefill = remembered, clientId = clientId, serviceName = serviceName, pendingEmail = remembered)
                     transport.sendFrame(
                         org.json.JSONObject().apply {
                             put("type", "email_submit"); put("email", remembered)
