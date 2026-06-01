@@ -22,6 +22,7 @@ import ro.eidkit.app.EidKitApp
 import ro.eidkit.app.relay.AttestationProvider
 import ro.eidkit.app.relay.OkHttpRelayTransport
 import ro.eidkit.app.relay.performAttestation
+import io.sentry.Sentry
 import ro.eidkit.sdk.EidKit
 import ro.eidkit.sdk.error.CeiError
 import ro.eidkit.sdk.model.ReadEvent
@@ -47,7 +48,7 @@ sealed class RemoteAuthState {
 
     data class EmailInput(val prefill: String?, val clientId: String = "", val serviceName: String = "", val pendingEmail: String? = null) : RemoteAuthState()
 
-    data class OtpInput(val email: String, val clientId: String = "", val serviceName: String = "") : RemoteAuthState()
+    data class OtpInput(val email: String, val clientId: String = "", val serviceName: String = "", val invalidCount: Int = 0) : RemoteAuthState()
 
     data class Success(
         val firstName: String = "",
@@ -280,7 +281,14 @@ class RemoteAuthViewModel(app: Application) : AndroidViewModel(app) {
                     ?: (s as? RemoteAuthState.OtpInput)?.clientId ?: ""
                 val serviceName = (s as? RemoteAuthState.EmailInput)?.serviceName
                     ?: (s as? RemoteAuthState.OtpInput)?.serviceName ?: ""
+                if (email.isEmpty()) {
+                    Sentry.captureMessage("email_otp_sent received but no email in state (state=${s::class.simpleName})")
+                }
                 _state.value = RemoteAuthState.OtpInput(email, clientId, serviceName)
+            }
+            "email_otp_invalid" -> {
+                val s = _state.value as? RemoteAuthState.OtpInput ?: return
+                _state.value = s.copy(invalidCount = s.invalidCount + 1)
             }
         }
     }
@@ -292,7 +300,12 @@ class RemoteAuthViewModel(app: Application) : AndroidViewModel(app) {
         }
         // Stamp the typed email so email_otp_sent can pick it up if OTP is needed
         _state.value = s.copy(pendingEmail = email)
-        activeTransport?.sendFrame(
+        val transport = activeTransport
+        if (transport == null) {
+            Sentry.captureMessage("submitEmail: activeTransport is null — email_submit frame dropped")
+            return
+        }
+        transport.sendFrame(
             org.json.JSONObject().apply {
                 put("type", "email_submit"); put("email", email)
             }.toString()
@@ -304,7 +317,12 @@ class RemoteAuthViewModel(app: Application) : AndroidViewModel(app) {
         if (remember && s != null && s.clientId.isNotEmpty()) {
             EmailStore.remember(getApplication(), s.clientId, s.serviceName, s.email)
         }
-        activeTransport?.sendFrame(
+        val transport = activeTransport
+        if (transport == null) {
+            Sentry.captureMessage("submitOtp: activeTransport is null — email_otp frame dropped")
+            return
+        }
+        transport.sendFrame(
             org.json.JSONObject().apply {
                 put("type", "email_otp"); put("code", code); put("remember", remember)
             }.toString()

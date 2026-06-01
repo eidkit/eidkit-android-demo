@@ -171,6 +171,7 @@
     <string name="label_otp">Verification code (6 digits)</string>
     <string name="email_input_hint">Enter the email address you want to associate with this service.</string>
     <string name="otp_hint">We sent a 6-digit code to %s. Enter it below.</string>
+    <string name="otp_invalid_error">Incorrect code. Please check and try again.</string>
     <string name="email_remember">Remember for future logins</string>
     <string name="action_continue">Continue</string>
     <string name="action_verify">Verify</string>

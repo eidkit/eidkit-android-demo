@@ -369,12 +369,21 @@ private fun EmailInputContent(state: RemoteAuthState.EmailInput, vm: RemoteAuthV
 private fun OtpInputContent(state: RemoteAuthState.OtpInput, vm: RemoteAuthViewModel) {
     var code by remember { mutableStateOf("") }
     var saveForNextTime by remember { mutableStateOf(false) }
+    // Clear local code each time server signals invalid so user retypes from scratch
+    LaunchedEffect(state.invalidCount) { if (state.invalidCount > 0) code = "" }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
             text = stringResource(R.string.otp_hint, state.email),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        if (state.invalidCount > 0) {
+            Text(
+                text = stringResource(R.string.otp_invalid_error),
+                style = MaterialTheme.typography.bodySmall,
+                color = ErrorRed,
+            )
+        }
         PinField(
             value = code,
             onValueChange = { code = it },
