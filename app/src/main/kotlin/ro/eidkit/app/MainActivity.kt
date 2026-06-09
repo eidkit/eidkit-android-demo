@@ -148,10 +148,20 @@ if (savedInstanceState == null && isEidkitDeepLink(intent?.data)) {
         adapter.enableReaderMode(
             this,
             { tag: Tag ->
-                val isoDep = IsoDep.get(tag) ?: return@enableReaderMode
+                android.util.Log.d("EidKit", "NFC tag detected: ${tag.id?.contentToString()}, cityHallActive=$cityHallActive")
+                val isoDep = IsoDep.get(tag)
+                if (isoDep == null) {
+                    android.util.Log.w("EidKit", "IsoDep.get returned null for tag ${tag.id?.contentToString()}")
+                    return@enableReaderMode
+                }
                 runOnUiThread {
                     if (cityHallActive) {
-                        cityHallVm?.onCardDetected(isoDep)
+                        val vm = cityHallVm
+                        if (vm == null) {
+                            android.util.Log.w("EidKit", "cityHallVm is null — NFC tap dropped")
+                        } else {
+                            vm.onCardDetected(isoDep)
+                        }
                     } else {
                         when (selectedTab) {
                             TAB_KYC     -> kycVm?.onCardDetected(isoDep)
@@ -191,8 +201,9 @@ if (isEidkitDeepLink(intent.data)) {
         val wsUrl        = uri.getQueryParameter("wss")         ?: return
         val serviceName  = uri.getQueryParameter("service")     ?: ""
         val traceparent  = uri.getQueryParameter("traceparent")
+        val mode         = uri.getQueryParameter("mode")        ?: "secure"
         if (!isAllowedWsUrl(wsUrl)) return
-        vm.initFromDeepLink(sessionToken, wsUrl, serviceName, traceparent)
+        vm.initFromDeepLink(sessionToken, wsUrl, serviceName, traceparent, mode)
     }
 
     private fun isAllowedWsUrl(url: String): Boolean {

@@ -290,9 +290,30 @@ private fun InputContent(state: RemoteAuthState.Input, vm: RemoteAuthViewModel) 
 
 @Composable
 private fun ScanningContent(state: RemoteAuthState.Scanning) {
-    NfcPrompt(modifier = Modifier.fillMaxWidth(), scanning = true)
+    NfcPrompt(modifier = Modifier.fillMaxWidth(), scanning = state.retryMessage == null)
 
     Spacer(Modifier.height(8.dp))
+
+    if (state.retryMessage != null) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_warning),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(16.dp),
+            )
+            Text(
+                text = state.retryMessage,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+    }
 
     val allSteps = listOf(
         ReadEvent.ConnectingToCard,
@@ -368,7 +389,6 @@ private fun EmailInputContent(state: RemoteAuthState.EmailInput, vm: RemoteAuthV
 @Composable
 private fun OtpInputContent(state: RemoteAuthState.OtpInput, vm: RemoteAuthViewModel) {
     var code by remember { mutableStateOf("") }
-    var saveForNextTime by remember { mutableStateOf(false) }
     // Clear local code each time server signals invalid so user retypes from scratch
     LaunchedEffect(state.invalidCount) { if (state.invalidCount > 0) code = "" }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -394,28 +414,8 @@ private fun OtpInputContent(state: RemoteAuthState.OtpInput, vm: RemoteAuthViewM
             maskable = false,
             onClear = { code = "" },
         )
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(
-                text = stringResource(R.string.email_remember),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Switch(
-                checked = saveForNextTime,
-                onCheckedChange = { saveForNextTime = it },
-                colors = SwitchDefaults.colors(
-                    uncheckedThumbColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                    uncheckedTrackColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
-                    uncheckedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
-                ),
-            )
-        }
         androidx.compose.material3.Button(
-            onClick = { if (code.length == 6) vm.submitOtp(code, saveForNextTime) },
+            onClick = { if (code.length == 6) vm.submitOtp(code, state.remember) },
             enabled = code.length == 6,
             modifier = Modifier.fillMaxWidth(),
         ) {
