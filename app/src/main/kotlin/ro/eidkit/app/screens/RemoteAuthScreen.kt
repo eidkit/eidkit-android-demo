@@ -96,7 +96,10 @@ fun RemoteAuthScreen(vm: RemoteAuthViewModel, onClose: (() -> Unit)? = null) {
     }
 
     Scaffold(
-        topBar = { RemoteAuthHeader(serviceName) },
+        topBar = {
+            val showClose = onClose != null && state !is RemoteAuthState.Success
+            RemoteAuthHeader(serviceName, if (showClose) onClose else null)
+        },
         containerColor = SurfaceDark,
     ) { innerPadding ->
         val focusManager = LocalFocusManager.current
@@ -130,7 +133,7 @@ fun RemoteAuthScreen(vm: RemoteAuthViewModel, onClose: (() -> Unit)? = null) {
 }
 
 @Composable
-private fun RemoteAuthHeader(serviceName: String) {
+private fun RemoteAuthHeader(serviceName: String, onClose: (() -> Unit)? = null) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -153,7 +156,7 @@ private fun RemoteAuthHeader(serviceName: String) {
                     modifier = Modifier.size(22.dp),
                 )
             }
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = serviceName,
                     style = MaterialTheme.typography.titleMedium,
@@ -165,6 +168,15 @@ private fun RemoteAuthHeader(serviceName: String) {
                     style = MaterialTheme.typography.bodySmall,
                     color = Color.White.copy(alpha = 0.8f),
                 )
+            }
+            if (onClose != null) {
+                IconButton(onClick = onClose) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_close),
+                        contentDescription = stringResource(R.string.action_cancel),
+                        tint = Color.White,
+                    )
+                }
             }
         }
     }

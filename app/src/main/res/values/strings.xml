@@ -188,4 +188,5 @@
     <string name="saved_data_action_clear">Șterge</string>
     <string name="saved_data_action_forget">Uită</string>
     <string name="saved_data_no_emails">Nu există emailuri reținute.</string>
+    <string name="action_cancel">Anulează</string>
 </resources>

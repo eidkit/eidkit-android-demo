@@ -424,7 +424,8 @@ class RemoteAuthViewModel(app: Application) : AndroidViewModel(app) {
                 val prefill = authJson.optString("prefill").takeIf { it.isNotEmpty() }
                 val clientId = authJson.optString("client_id").takeIf { it.isNotEmpty() } ?: ""
                 val remembered = if (clientId.isNotEmpty()) EmailStore.getRemembered(getApplication(), clientId) else null
-                if (remembered != null) {
+                val autoSubmit = remembered != null && (prefill == null || remembered.equals(prefill, ignoreCase = true))
+                if (autoSubmit) {
                     _state.value = RemoteAuthState.EmailInput(prefill = remembered, clientId = clientId, serviceName = input.serviceName, pendingEmail = remembered)
                     submitFastEmail(remembered, remember = false)
                 } else {
@@ -483,9 +484,10 @@ class RemoteAuthViewModel(app: Application) : AndroidViewModel(app) {
                 val prefill = frame.optString("prefill").takeIf { it.isNotEmpty() }
                 val clientId = frame.optString("client_id").takeIf { it.isNotEmpty() } ?: ""
                 val serviceName = _serviceName.value
-                // If a remembered email exists for this client, silently resubmit it
                 val remembered = if (clientId.isNotEmpty()) EmailStore.getRemembered(getApplication(), clientId) else null
-                if (remembered != null) {
+                // Only auto-submit if remembered matches server prefill — server prefill wins (may differ if verified on another device)
+                val autoSubmit = remembered != null && (prefill == null || remembered.equals(prefill, ignoreCase = true))
+                if (autoSubmit) {
                     _state.value = RemoteAuthState.EmailInput(prefill = remembered, clientId = clientId, serviceName = serviceName, pendingEmail = remembered)
                     transport.sendFrame(
                         org.json.JSONObject().apply {
